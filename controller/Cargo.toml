@@ -1,0 +1,20 @@
+[package]
+name = "controller"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-trait = "0.1.89"
+tokio = { version = "1.50.0", features = ["full"] }
+tracing = "0.1.44"
+uuid = { version = "1.21.0", features = ["v4"] }
+builder={path="../builder"}
+runtime={path="../runtime"}
+proxy={path="../proxy"}
+db={path="../db"}
+domain={path="../domain"}
+common={path="../common"}
+anyhow = "1.0.102"
+
+[lints]
+workspace = true

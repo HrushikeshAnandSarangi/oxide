@@ -1,0 +1,13 @@
+[package]
+name = "db"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+domain={path="../domain"}
+chrono = "0.4.44"
+sqlx = { workspace = true, features = ["chrono", "macros", "postgres", "runtime-tokio", "uuid"] }
+uuid = { version = "1.21.0", features = ["v4"] }
+
+[lints]
+workspace = true

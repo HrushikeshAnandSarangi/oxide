@@ -1,0 +1,18 @@
+[package]
+name = "builder"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+domain={path="../domain"}
+common={path="../common"}
+tokio = { version = "1.49.0", features = ["full"] }
+uuid = { version = "1.21.0", features = ["v4"] }
+chrono = "0.4.44"
+tracing = "0.1.44"
+thiserror = "2.0.18"
+anyhow = "1.0.102"
+
+
+[lints]
+workspace = true

@@ -1,0 +1,26 @@
+[workspace]
+
+resolver="2"
+
+members=["api","builder","common"
+
+, "controller", "db", "domain", "proxy", "runtime"]
+
+[workspace.dependencies]
+sqlx = { version = "0.8.6", features = [
+    "runtime-tokio-rustls",
+    "postgres",
+    "uuid",
+    "chrono",
+    "macros"
+] }
+
+
+[workspace.lints.rust]
+unsafe_code="forbid"
+
+[workspace.lints.clippy]
+unwrap_used="warn"
+expect_used="warn"
+
+
