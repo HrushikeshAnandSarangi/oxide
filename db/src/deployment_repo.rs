@@ -43,7 +43,25 @@ impl DeploymentRepository {
             .execute(&self.pool)
             .await?;
         Ok(())
-        
+    }
+
+    pub async fn find_by_id(&self, id: &Uuid) -> Result<Option<crate::models::DeploymentRow>, sqlx::Error> {
+        sqlx::query_as::<_, crate::models::DeploymentRow>(
+            r#"
+            SELECT * FROM deployments WHERE id = $1
+            "#
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await
+    }
+
+    pub async fn list_all(&self) -> Result<Vec<crate::models::DeploymentRow>, sqlx::Error> {
+        sqlx::query_as::<_, crate::models::DeploymentRow>(
+            "SELECT * FROM deployments ORDER BY created_at DESC"
+        )
+        .fetch_all(&self.pool)
+        .await
     }
 
     pub async fn get_running_deployments(&self)->Result<Vec<(String,u16)>,sqlx::Error>{

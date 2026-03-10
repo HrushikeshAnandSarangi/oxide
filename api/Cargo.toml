@@ -23,3 +23,10 @@ tracing = "0.1.44"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["async_tokio"] }
+
+[[bench]]
+name = "api_bench"
+harness = false

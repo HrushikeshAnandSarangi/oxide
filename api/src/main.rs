@@ -33,6 +33,7 @@ async fn main() -> anyhow::Result<()> {
         .context("Failed to connect to the database")?;
 
     let deployment_repo = Arc::new(DeploymentRepository::new(pool.clone()));
+    let project_repo = Arc::new(db::project_repo::ProjectRepository::new(pool.clone()));
 
     tracing::info!("Initializing subsystems (Builder, Runtime, Proxy)...");
     let builder_path = std::path::PathBuf::from("/var/oxide/builds");
@@ -58,7 +59,13 @@ async fn main() -> anyhow::Result<()> {
         runtime,
         proxy: proxy_state.clone(),
         deployments: deployment_repo,
+        projects: project_repo,
     };
+
+    let health_state = Arc::new(control_state.clone());
+    tokio::spawn(async move {
+        controller::health_monitor::start_health_monitor(health_state).await;
+    });
 
     let control_plane = Arc::new(ControlPlane::new(control_state));
     let api_state = AppState { control_plane };
