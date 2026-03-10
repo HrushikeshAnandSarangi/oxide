@@ -40,7 +40,15 @@ impl DeploymentService {
         let env_vars = if env_strings.is_empty() { None } else { Some(env_strings) };
         
         // --- 1. Queue to Building ---
-        tracing::info!("Starting Deployment for {}", deployment_id);
+        tracing::info!("Starting Deployment for {} with version {}", deployment_id, "v1");
+        
+        let mut new_deployment = domain::deployment::Deployment::new(project.id, "v1".to_string());
+        new_deployment.id = deployment_id;
+        
+        if let Err(e) = self.state.deployments.create(&new_deployment).await {
+            tracing::warn!("Failed to create deployment record: {}", e);
+        }
+
         if let Err(e) = self.state.deployments.update_status(&deployment_id, DeploymentStatus::Building).await {
             tracing::warn!("Failed to update deployment status to Building: {}", e);
         }

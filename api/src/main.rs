@@ -71,10 +71,14 @@ async fn main() -> anyhow::Result<()> {
     let api_state = AppState { control_plane };
     let app = create_router(api_state);
 
+    let proxy_state_clone = proxy_state.clone();
     let proxy_handle = tokio::spawn(async move {
         tracing::info!("Starting Pingora Proxy Server...");
-        // This is a placeholder for wherever your proxy server startup logic lives.
-        // proxy::server::start(proxy_state).await;
+        // proxy::start_proxy blocks the thread, so run it in spawn_blocking
+        let state_clone = proxy_state_clone.clone();
+        tokio::task::spawn_blocking(move || {
+            proxy::proxy::start_proxy((*state_clone).clone());
+        }).await.unwrap();
     });
 
     let api_handle = tokio::spawn(async move {
