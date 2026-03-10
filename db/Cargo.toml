@@ -5,9 +5,10 @@ edition = "2024"
 
 [dependencies]
 domain={path="../domain"}
-chrono = "0.4.44"
+chrono = { version = "0.4.44", features = ["serde"] }
 sqlx = { workspace = true, features = ["chrono", "macros", "postgres", "runtime-tokio", "uuid"] }
-uuid = { version = "1.21.0", features = ["v4"] }
+uuid = { version = "1.21.0", features = ["v4", "serde"] }
+serde = { version = "1.0.228", features = ["derive"] }
 
 [lints]
 workspace = true

@@ -28,7 +28,7 @@ pub async fn get_project_logs(State(state): State<AppState>, Path(id): Path<uuid
     let dep = state.control_plane.state.deployments.find_by_id(&dep_id).await.map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?.ok_or(StatusCode::NOT_FOUND)?;
     let container_id = dep.container_id.ok_or(StatusCode::NOT_FOUND)?;
 
-    state.control_plane.state.runtime.get_logs(&container_id).await.map_err(|e| {
+    state.control_plane.state.runtime.get_logs(&container_id).await.map_err(|e: common::error::OxideError| {
         tracing::error!("Failed to get logs for {}: {}", container_id, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })

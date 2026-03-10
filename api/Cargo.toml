@@ -10,6 +10,7 @@ db={path="../db"}
 builder={path="../builder"}
 runtime={path="../runtime"}
 proxy={path="../proxy"}
+domain={path="../domain"}
 sqlx = { version = "0.8", features = ["postgres", "runtime-tokio-rustls"] }
 axum = "0.8.8"
 serde = { version = "1.0.228", features = ["derive"] }

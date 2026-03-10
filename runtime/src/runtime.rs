@@ -29,4 +29,8 @@ impl Runtime {
     pub async fn remove(&self, id: &str) -> Result<(), OxideError> {
         container::remove_container(&self.docker, id).await
     }
+
+    pub async fn get_logs(&self, id: &str) -> Result<String, OxideError> {
+        container::get_logs_container(&self.docker, id).await
+    }
 }

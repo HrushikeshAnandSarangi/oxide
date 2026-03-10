@@ -5,8 +5,11 @@ use crate::types::{DeploymentId, ProjectId};
 
 
 
-#[derive(Debug,Clone,PartialEq)]
-pub enum DeploymentStatus{
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum DeploymentStatus {
+    Queued,
     Building,
     BuildFailed,
     ImageBuilding,
@@ -16,17 +19,16 @@ pub enum DeploymentStatus{
     Stopped,
 }
 
-
-#[derive(Debug,Clone)]
-pub struct Deployment{
-    pub id:DeploymentId,
-    pub project_id:ProjectId,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Deployment {
+    pub id: DeploymentId,
+    pub project_id: ProjectId,
     pub version: String,
-    pub artifact_path:Option<String>,
-    pub docker_image:Option<String>,
-    pub container_id:Option<String>,
-    pub status:DeploymentStatus,
-    pub created_at:DateTime<Utc>,
+    pub artifact_path: Option<String>,
+    pub docker_image: Option<String>,
+    pub container_id: Option<String>,
+    pub status: DeploymentStatus,
+    pub created_at: DateTime<Utc>,
 }
 
 impl Deployment {

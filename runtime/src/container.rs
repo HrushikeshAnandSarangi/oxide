@@ -53,3 +53,34 @@ pub async fn remove_container(docker: &Docker, id: &str) -> Result<(), OxideErro
     docker.remove_container(id, Some(options)).await.map_err(|e| OxideError::Runtime(e.to_string()))?;
     Ok(())
 }
+
+pub async fn get_logs_container(docker: &Docker, id: &str) -> Result<String, OxideError> {
+    use bollard::container::LogOutput;
+    use bollard::query_parameters::LogsOptions;
+    use futures_util::StreamExt;
+
+    let options = LogsOptions {
+        stdout: true,
+        stderr: true,
+        tail: "100".to_string(),
+        ..Default::default()
+    };
+
+    let mut stream = docker.logs(id, Some(options));
+    let mut logs = String::new();
+
+    while let Some(msg) = stream.next().await {
+        match msg {
+            Ok(LogOutput::StdOut { message }) => {
+                logs.push_str(&String::from_utf8_lossy(&message));
+            }
+            Ok(LogOutput::StdErr { message }) => {
+                logs.push_str(&String::from_utf8_lossy(&message));
+            }
+            Ok(_) => {}
+            Err(e) => return Err(OxideError::Runtime(e.to_string())),
+        }
+    }
+
+    Ok(logs)
+}
