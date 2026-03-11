@@ -13,7 +13,10 @@ echo "========================================"
 # 1. Copy the compiled binaries to a stable location
 echo ">>> Setting up application directories..."
 sudo mkdir -p /var/oxide/app
-# We assume this script is run from the root of the oxide repository
+
+# Change directory to the root of the oxide repository (parent of the script)
+cd "$(dirname "$0")/.."
+
 sudo cp -r . /var/oxide/app/
 sudo chown -R root:root /var/oxide/app
 
