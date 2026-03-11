@@ -1,0 +1,17 @@
+[Unit]
+Description=Oxide API Server
+After=network.target postgresql.service docker.service
+Requires=postgresql.service docker.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/oxide/app
+ExecStart=/var/oxide/app/target/release/api
+Environment="DATABASE_URL=postgres://postgres:postgres@localhost:5432/oxide"
+Environment="RUST_LOG=info"
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

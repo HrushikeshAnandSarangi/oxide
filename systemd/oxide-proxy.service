@@ -1,0 +1,17 @@
+[Unit]
+Description=Oxide Pingora Proxy
+After=network.target postgresql.service oxide-api.service
+Requires=postgresql.service oxide-api.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/oxide/app
+ExecStart=/var/oxide/app/target/release/proxy
+Environment="DATABASE_URL=postgres://postgres:postgres@localhost:5432/oxide"
+Environment="RUST_LOG=info"
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
