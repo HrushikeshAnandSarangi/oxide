@@ -4,7 +4,7 @@ resolver="2"
 
 members=["api","builder","common"
 
-, "controller", "db", "domain", "proxy", "runtime"]
+, "controller", "db", "domain", "proxy", "runtime", "telemetry"]
 
 [workspace.dependencies]
 sqlx = { version = "0.8.6", features = [

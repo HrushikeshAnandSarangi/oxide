@@ -66,6 +66,8 @@ Tools like Docker are often used for both. This works but at the cost of large i
 | Proxy | Pingora (Rust) | Programmatic routing, Rust-native |
 | Build system | Nix | Deterministic, reproducible artifacts |
 | Runtime isolation | Docker | Process containment, resource limits |
+| Metrics | Prometheus + Grafana | Live operational dashboards, scraped from `/metrics` |
+| Telemetry ETL | Redis Streams + Postgres | Durable event log for historical deploy/build analytics |
 | Base OS | Ubuntu (VM) | Clean, minimal, reproducible base |
 
 ---
@@ -76,9 +78,12 @@ Tools like Docker are often used for both. This works but at the cost of large i
 
 - **Deterministic builds via Nix** — identical artifacts across any host, version mismatch eliminated at build time
 - **Docker runtime isolation** — each deployed app runs in an isolated container, runtime concerns separated from build concerns
-- **Axum API** — deploy, status, config, and health endpoints
+- **Axum API** — deploy, status, config, health, and metrics endpoints
 - **Pingora proxy** — programmatic Rust-native traffic routing to deployed services
-- **Tests** — core deployment pipeline covered
+- **Health monitoring** — periodic per-deployment health checks with automatic route removal and status update on failure
+- **Prometheus metrics + Grafana dashboards** — deploy counts by status, build duration, active containers, health-check failures; `docker compose up -d` brings up the whole stack locally
+- **Telemetry ETL (Redis Streams)** — deployment lifecycle events are streamed via Redis and loaded into a Postgres event log by the `telemetry` consumer, for historical analytics independent of live metrics
+- **Tests** — unit coverage for proxy routing/state, crypto round-trips, and Nix artifact resolution
 
 ### In Progress
 
@@ -86,14 +91,13 @@ Tools like Docker are often used for both. This works but at the cost of large i
 - **CI/CD pipeline** — GitHub Actions for automated build and deployment
 - **Linting and formatting** — `clippy` + `rustfmt` enforced
 - **Benchmarks** — Pingora routing and Axum endpoint throughput
+- **Integration tests** — full deploy() pipeline against a real Postgres/Docker/Nix environment
 
 ### Planned
 
 - **Multi-app routing** — multiple applications on a single VM with path/subdomain routing via Pingora
-- **Health monitoring** — per-deployment health checks with automatic restart on failure
 - **Rollback** — one-command rollback to previous Nix-built artifact
 - **TLS** — automatic certificate provisioning
-- **Metrics** — deployment and request telemetry
 
 ---
 
@@ -127,18 +131,30 @@ cargo build --release
 
 ### Run Locally
 
-```bash
-# Start the Axum API server
-cargo run --bin oxide-api
+One-time setup (Postgres, Redis, Prometheus, Grafana via `docker compose`, migrations, build):
 
-# Start the Pingora proxy
-cargo run --bin oxide-proxy
+```bash
+./scripts/dev_setup.sh
 ```
+
+Then start the platform — the `api` binary runs both the Axum API (`:3001`, including `/metrics`) and the Pingora proxy (`:8000`) in-process:
+
+```bash
+cargo run -p api
+```
+
+Optionally, start the telemetry ETL consumer (reads deploy/health events off Redis Streams, loads them into Postgres):
+
+```bash
+cargo run -p telemetry
+```
+
+Grafana is at `http://localhost:3000` (anonymous admin access, "Oxide Overview" dashboard preloaded).
 
 ### Run Tests
 
 ```bash
-cargo test
+cargo test --workspace
 ```
 
 ---

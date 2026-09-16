@@ -17,6 +17,7 @@ domain={path="../domain"}
 common={path="../common"}
 anyhow = "1.0.102"
 reqwest = { version = "0.12", features = ["json"] }
+prometheus = "0.13"
 
 [lints]
 workspace = true

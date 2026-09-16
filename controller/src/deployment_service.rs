@@ -1,7 +1,10 @@
 use std::sync::Arc;
+use std::time::Instant;
 use anyhow::Result;
 use uuid::Uuid;
 use crate::state::ControlState;
+use crate::metrics;
+use common::events::{DeploymentEvent, EventType};
 
 pub struct DeploymentService {
     state: Arc<ControlState>,
@@ -12,9 +15,21 @@ impl DeploymentService {
         Self { state }
     }
 
+    /// Best-effort telemetry publish — a down/unconfigured Redis must never
+    /// fail or slow down a deployment, it just means this event is dropped.
+    async fn emit(&self, event: DeploymentEvent) {
+        if let Some(publisher) = &self.state.events {
+            if let Err(e) = publisher.publish(&event).await {
+                tracing::debug!("Failed to publish telemetry event: {}", e);
+            }
+        }
+    }
+
     pub async fn deploy(&self, deployment_id: Uuid, subdomain: String) -> Result<()> {
         use domain::deployment::DeploymentStatus;
-        
+
+        self.emit(DeploymentEvent::new(deployment_id, &subdomain, EventType::DeploymentStarted)).await;
+
         // --- 0. Fetch Project & Env Vars ---
         let project = match self.state.projects.find_by_subdomain(&subdomain).await {
             Ok(Some(p)) => p,
@@ -54,36 +69,60 @@ impl DeploymentService {
         }
 
         // --- 2. Build Execution ---
+        self.emit(DeploymentEvent::new(deployment_id, &subdomain, EventType::BuildStarted)).await;
+        let build_start = Instant::now();
         let artifact = match self.state.builder.build(&repo_url, deployment_id).await {
             Ok(artifact) => artifact,
             Err(e) => {
                 let _ = self.state.deployments.update_status(&deployment_id, DeploymentStatus::BuildFailed).await;
+                metrics::DEPLOYMENTS_TOTAL.with_label_values(&["BuildFailed"]).inc();
+                self.emit(
+                    DeploymentEvent::new(deployment_id, &subdomain, EventType::BuildFailed)
+                        .with_duration_ms(build_start.elapsed().as_millis() as i64),
+                )
+                .await;
                 return Err(e.into());
             }
         };
+        let build_duration = build_start.elapsed();
+        metrics::BUILD_DURATION_SECONDS.observe(build_duration.as_secs_f64());
+        self.emit(
+            DeploymentEvent::new(deployment_id, &subdomain, EventType::BuildCompleted)
+                .with_duration_ms(build_duration.as_millis() as i64),
+        )
+        .await;
 
         // --- 3. Image Building & Container Starting ---
         tracing::info!("Build Completed. Building Image...");
         let _ = self.state.deployments.update_status(&deployment_id, DeploymentStatus::ImageBuilding).await;
-        
+
         let _ = self.state.deployments.update_status(&deployment_id, DeploymentStatus::ContainerStarting).await;
         let (container_id, port) = match self.state.runtime.deploy(artifact, deployment_id, env_vars).await {
             Ok(res) => res,
             Err(e) => {
                 let _ = self.state.deployments.update_status(&deployment_id, DeploymentStatus::Crashed).await;
+                metrics::DEPLOYMENTS_TOTAL.with_label_values(&["Crashed"]).inc();
+                self.emit(DeploymentEvent::new(deployment_id, &subdomain, EventType::DeploymentCrashed)).await;
                 return Err(e.into());
             }
         };
+        metrics::ACTIVE_CONTAINERS.inc();
+        self.emit(DeploymentEvent::new(deployment_id, &subdomain, EventType::ContainerStarted)).await;
 
         // --- 4. Running & Route Setup ---
         tracing::info!("{} container started", container_id);
         self.state.proxy.add_route(subdomain.clone(), port);
-        
-        // This deployment is active, store container_id in DB (we need an update method, wait! I will just update status for now assuming we had a way)
+
+        if let Err(e) = self.state.deployments.set_container_info(&deployment_id, &container_id, port).await {
+            tracing::warn!("Failed to persist container info: {}", e);
+        }
         let _ = self.state.deployments.update_status(&deployment_id, DeploymentStatus::Running).await;
         // Also update the active deployment id for the project
         let _ = self.state.projects.update_active_deployment(&project.id, &deployment_id).await;
         tracing::info!("Route activated {} -> {}", subdomain, port);
+        metrics::DEPLOYMENTS_TOTAL.with_label_values(&["Running"]).inc();
+        self.emit(DeploymentEvent::new(deployment_id, &subdomain, EventType::RouteActivated)).await;
+        self.emit(DeploymentEvent::new(deployment_id, &subdomain, EventType::DeploymentCompleted)).await;
 
         // --- 5. Clean up old container ---
         if let Some(old_deployment_id) = project.active_deployment_id {
@@ -93,10 +132,11 @@ impl DeploymentService {
                     let _ = self.state.runtime.stop(&old_container_id).await;
                     let _ = self.state.runtime.remove(&old_container_id).await;
                     let _ = self.state.deployments.update_status(&old_deployment_id, DeploymentStatus::Stopped).await;
+                    metrics::ACTIVE_CONTAINERS.dec();
                 }
             }
         }
-        
+
         Ok(())
     }
 }

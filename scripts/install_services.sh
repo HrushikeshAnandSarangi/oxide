@@ -20,24 +20,23 @@ cd "$(dirname "$0")/.."
 sudo cp -r . /var/oxide/app/
 sudo chown -R root:root /var/oxide/app
 
-# 2. Copy the systemd service files
-echo ">>> Copying systemd service files..."
+# 2. Copy the systemd service file
+# NOTE: there is only one binary (`api`) — it spawns the Pingora proxy
+# in-process (see api/src/main.rs), so there is no separate proxy service.
+echo ">>> Copying systemd service file..."
 sudo cp systemd/oxide-api.service /etc/systemd/system/
-sudo cp systemd/oxide-proxy.service /etc/systemd/system/
 
 # 3. Reload systemd daemon
 echo ">>> Reloading systemctl daemon..."
 sudo systemctl daemon-reload
 
-# 4. Enable services to start on boot
-echo ">>> Enabling services..."
+# 4. Enable service to start on boot
+echo ">>> Enabling service..."
 sudo systemctl enable oxide-api
-sudo systemctl enable oxide-proxy
 
-# 5. Start services
-echo ">>> Starting services..."
+# 5. Start service
+echo ">>> Starting service..."
 sudo systemctl start oxide-api
-sudo systemctl start oxide-proxy
 
 echo "========================================"
 echo "  Oxide Services Installed & Running!   "

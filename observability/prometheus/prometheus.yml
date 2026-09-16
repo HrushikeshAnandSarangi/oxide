@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: "oxide-api"
+    static_configs:
+      # Oxide's api binary runs on the host (via `cargo run -p api`), not in
+      # this compose network, so we reach it via the docker host gateway.
+      - targets: ["host.docker.internal:3001"]

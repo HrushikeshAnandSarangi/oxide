@@ -26,6 +26,18 @@ pub struct ProjectRow{
 }
 
 #[derive(sqlx::FromRow, serde::Serialize)]
+pub struct DeploymentEventRow {
+    pub id: Uuid,
+    pub deployment_id: Uuid,
+    pub subdomain: String,
+    pub event_type: String,
+    pub status: Option<String>,
+    pub duration_ms: Option<i64>,
+    pub occurred_at: DateTime<Utc>,
+    pub recorded_at: DateTime<Utc>,
+}
+
+#[derive(sqlx::FromRow, serde::Serialize)]
 pub struct DeploymentRow{
     pub id: Uuid,
     pub project_id:Uuid,
@@ -33,6 +45,7 @@ pub struct DeploymentRow{
     pub artifact_path:Option<String>,
     pub docker_image:Option<String>,
     pub container_id:Option<String>,
+    pub container_port:Option<i32>,
     pub status:String,
     pub created_at:DateTime<Utc>,
 }

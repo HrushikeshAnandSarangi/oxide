@@ -1,5 +1,5 @@
 [Unit]
-Description=Oxide API Server
+Description=Oxide API + Pingora Proxy (single process — api spawns the proxy in-process)
 After=network.target postgresql.service docker.service
 Requires=postgresql.service docker.service
 

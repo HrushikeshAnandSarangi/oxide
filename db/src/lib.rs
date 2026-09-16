@@ -1,6 +1,7 @@
 pub mod models;
 pub mod project_repo;
 pub mod deployment_repo;
+pub mod telemetry_repo;
 
 use sqlx::postgres::PgPoolOptions;
 use sqlx::PgPool;

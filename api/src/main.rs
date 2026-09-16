@@ -43,6 +43,18 @@ async fn main() -> anyhow::Result<()> {
     let runtime = Arc::new(Runtime::new(runtime_path).context("Failed to initialize Docker runtime")?);
     let proxy_state = Arc::new(ProxyState::new());
 
+    let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+    let events = match common::events::EventPublisher::connect(&redis_url).await {
+        Ok(publisher) => {
+            tracing::info!("Connected to Redis for telemetry at {}", redis_url);
+            Some(Arc::new(publisher))
+        }
+        Err(e) => {
+            tracing::warn!("Telemetry disabled — could not connect to Redis: {}", e);
+            None
+        }
+    };
+
     tracing::info!("Recovering proxy routing state from database...");
     match deployment_repo.get_running_deployments().await {
         std::result::Result::Ok(active_routes) => {
@@ -60,6 +72,7 @@ async fn main() -> anyhow::Result<()> {
         proxy: proxy_state.clone(),
         deployments: deployment_repo,
         projects: project_repo,
+        events,
     };
 
     let health_state = Arc::new(control_state.clone());

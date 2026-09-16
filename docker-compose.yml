@@ -1,0 +1,57 @@
+version: "3.9"
+
+# Local dev + demo stack: Postgres and Redis are required for Oxide itself
+# (Redis backs the telemetry ETL pipeline in common::events / telemetry);
+# Prometheus and Grafana are the observability layer scraping Oxide's
+# /metrics endpoint. Run with: docker compose up -d
+services:
+  postgres:
+    image: postgres:16
+    container_name: oxide-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: oxide
+    ports:
+      - "5432:5432"
+    volumes:
+      - oxide_pg_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: oxide-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  prometheus:
+    image: prom/prometheus
+    container_name: oxide-prometheus
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - oxide_prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana
+    container_name: oxide-grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards
+    ports:
+      - "3000:3000"
+
+volumes:
+  oxide_pg_data:
+  oxide_prometheus_data:

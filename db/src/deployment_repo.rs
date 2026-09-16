@@ -13,7 +13,7 @@ impl DeploymentRepository {
     pub async fn create(&self,deployment:&Deployment)->Result<(),sqlx::Error>{
         sqlx::query(
             r#"
-            INSERT INTO DeploymentRepository(id,project_id,version,artifact_path,docker_image,container_id,status,created_at)
+            INSERT INTO deployments(id,project_id,version,artifact_path,docker_image,container_id,status,created_at)
             VALUES($1,$2,$3,$4,$5,$6,$7,$8)
             "#
         )
@@ -25,6 +25,22 @@ impl DeploymentRepository {
             .bind(deployment.container_id.clone())
             .bind(format!("{:?}",deployment.status))
             .bind(deployment.created_at)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn set_container_info(&self,id:&Uuid,container_id:&str,port:u16)->Result<(),sqlx::Error>{
+        sqlx::query(
+            r#"
+            UPDATE deployments
+            SET container_id = $1, container_port = $2
+            WHERE id = $3
+            "#
+        )
+            .bind(container_id)
+            .bind(port as i32)
+            .bind(id)
             .execute(&self.pool)
             .await?;
         Ok(())

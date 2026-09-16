@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use std::time::Duration;
 use crate::state::ControlState;
+use crate::metrics;
+use common::events::{DeploymentEvent, EventType};
 use domain::deployment::DeploymentStatus;
 
 pub async fn start_health_monitor(state: Arc<ControlState>) {
@@ -18,11 +20,21 @@ pub async fn start_health_monitor(state: Arc<ControlState>) {
 
                 if !is_healthy {
                     tracing::warn!("Health check failed for subdomain {} on port {}", subdomain, port);
+                    metrics::HEALTH_CHECK_FAILURES_TOTAL.inc();
                     if let Ok(Some(project)) = state.projects.find_by_subdomain(&subdomain).await {
                         if let Some(deployment_id) = project.active_deployment_id {
                             tracing::error!("Marking deployment {} as Crashed", deployment_id);
                             let _ = state.deployments.update_status(&deployment_id, DeploymentStatus::Crashed).await;
-                            
+                            metrics::DEPLOYMENTS_TOTAL.with_label_values(&["Crashed"]).inc();
+                            metrics::ACTIVE_CONTAINERS.dec();
+
+                            if let Some(publisher) = &state.events {
+                                let event = DeploymentEvent::new(deployment_id, &subdomain, EventType::HealthCheckFailed);
+                                if let Err(e) = publisher.publish(&event).await {
+                                    tracing::debug!("Failed to publish telemetry event: {}", e);
+                                }
+                            }
+
                             // Remove crashed route from the proxy mapper
                             state.proxy.remove_route(&subdomain);
                         }
