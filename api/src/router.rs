@@ -19,8 +19,8 @@ pub fn create_router(state: AppState) -> Router {
         .route("/deploy", post(deploy))
         .route("/project", post(create_project))
         .route("/projects", get(list_projects))
-        .route("/projects/:id/logs", get(get_project_logs))
+        .route("/projects/{id}/logs", get(get_project_logs))
         .route("/deployments", get(list_deployments))
-        .route("/deployments/:id", get(get_deployment))
+        .route("/deployments/{id}", get(get_deployment))
         .with_state(state)
 }

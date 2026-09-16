@@ -21,6 +21,7 @@ tower-http = { version = "0.6.8", features = ["trace"] }
 uuid = { version = "1.22.0", features = ["v4"] }
 anyhow = "1.0.102"
 tracing = "0.1.44"
+dotenvy = "0.15"
 
 [lints]
 workspace = true

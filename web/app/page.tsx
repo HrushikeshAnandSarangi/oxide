@@ -19,8 +19,8 @@ export default function Dashboard() {
   // Form states
   const [name, setName] = useState("");
   const [subdomain, setSubdomain] = useState("");
-  const [deploySubdomain, setDeploySubdomain] = useState("");
   const [repoUrl, setRepoUrl] = useState("");
+  const [deploySubdomain, setDeploySubdomain] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -41,10 +41,11 @@ export default function Dashboard() {
     setIsLoading(true);
     setMessage(null);
     try {
-      const res = await api.createProject({ name, subdomain });
+      const res = await api.createProject({ name, subdomain, repo_url: repoUrl || undefined });
       setMessage({ type: "success", text: res.message || "Project created successfully!" });
       setName("");
       setSubdomain("");
+      setRepoUrl("");
     } catch (err: any) {
       setMessage({ type: "error", text: err.message || "Failed to create project" });
     } finally {
@@ -57,10 +58,9 @@ export default function Dashboard() {
     setIsLoading(true);
     setMessage(null);
     try {
-      const res = await api.deployProject({ subdomain: deploySubdomain, repo_url: repoUrl });
+      const res = await api.deployProject({ subdomain: deploySubdomain });
       setMessage({ type: "success", text: res || "Deployment started successfully!" });
       setDeploySubdomain("");
-      setRepoUrl("");
     } catch (err: any) {
       setMessage({ type: "error", text: err.message || "Failed to start deployment" });
     } finally {
@@ -196,6 +196,17 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-neutral-300">Git Repository URL</label>
+                <input
+                  type="url"
+                  placeholder="https://github.com/user/repo"
+                  value={repoUrl}
+                  onChange={(e) => setRepoUrl(e.target.value)}
+                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-medium"
+                />
+                <p className="text-xs text-neutral-500 mt-1 pl-1">Must contain a Nix flake whose build output has a Dockerfile at its root. Can be added later.</p>
+              </div>
               <div className="pt-2">
                 <button
                   type="submit"
@@ -225,23 +236,12 @@ export default function Dashboard() {
                   onChange={(e) => setDeploySubdomain(e.target.value)}
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium"
                 />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-neutral-300">Git Repository URL</label>
-                <input
-                  required
-                  type="url"
-                  placeholder="https://github.com/user/repo"
-                  value={repoUrl}
-                  onChange={(e) => setRepoUrl(e.target.value)}
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium"
-                />
-                <p className="text-xs text-neutral-500 mt-1 pl-1">Must be a public repository containing a Dockerfile.</p>
+                <p className="text-xs text-neutral-500 mt-1 pl-1">Deploys the repository URL already saved on this project (set it in Create Project).</p>
               </div>
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={isLoading || !deploySubdomain || !repoUrl}
+                  disabled={isLoading || !deploySubdomain}
                   className="bg-blue-500 text-white hover:bg-blue-400 disabled:opacity-50 disabled:cursor-not-allowed w-full rounded-xl py-3 font-semibold transition-all shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:shadow-[0_0_25px_rgba(59,130,246,0.4)] flex justify-center items-center gap-2"
                 >
                   {isLoading ? (

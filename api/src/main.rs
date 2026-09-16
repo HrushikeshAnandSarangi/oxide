@@ -19,7 +19,9 @@ async fn main() -> anyhow::Result<()> {
     use proxy::state::ProxyState;
     use runtime::runtime::Runtime;
 
+    dotenvy::dotenv().ok();
     logging::init();
+    controller::metrics::init();
     tracing::info!("Starting Oxide Platform...");
 
     let database_url = std::env::var("DATABASE_URL")

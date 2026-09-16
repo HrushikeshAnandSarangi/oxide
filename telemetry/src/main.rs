@@ -18,6 +18,7 @@ const CONSUMER_NAME: &str = "telemetry-consumer-1";
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    dotenvy::dotenv().ok();
     common::logging::init();
     tracing::info!("Starting Oxide Telemetry ETL consumer...");
 

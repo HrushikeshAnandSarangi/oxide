@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 common = { path = "../common" }
+dotenvy = "0.15"
 db = { path = "../db" }
 redis = { version = "0.27", features = ["tokio-comp", "streams"] }
 serde_json = "1.0.149"

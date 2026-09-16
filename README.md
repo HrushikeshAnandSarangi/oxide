@@ -133,25 +133,34 @@ cargo build --release
 
 ### Run Locally
 
-One-time setup (Postgres, Redis, Prometheus, Grafana via `docker compose`, migrations, build):
+One-time setup (Postgres, Redis, Prometheus, Grafana via `docker compose`, migrations, build; requires the Docker daemon already running):
 
 ```bash
 ./scripts/dev_setup.sh
+npm run setup
 ```
 
-Then start the platform — the `api` binary runs both the Axum API (`:3001`, including `/metrics`) and the Pingora proxy (`:8000`) in-process:
+Then bring up the whole architecture — backing services, the `api` process (Axum API on `:3001` incl. `/metrics`, plus the Pingora proxy on `:8000`, spawned in-process), the `telemetry` ETL consumer, and the `web/` control panel (`:3000`), all at once:
 
 ```bash
-cargo run -p api
+npm run start
 ```
 
-Optionally, start the telemetry ETL consumer (reads deploy/health events off Redis Streams, loads them into Postgres):
+`web/` is Oxide's dashboard: create a project (with its Git repo URL), trigger a deploy, and watch deployment status — it proxies `/api/*` to the Rust API (see `web/next.config.ts`). Stop everything with `npm run stop` (stops the docker-compose services; `Ctrl+C` stops the Rust/Next processes).
 
-```bash
-cargo run -p telemetry
-```
+Prefer running each piece by hand instead? `cargo run -p api`, `cargo run -p telemetry`, and `npm --prefix web run dev` individually, after `docker compose up -d`.
 
-Grafana is at `http://localhost:3000` (anonymous admin access, "Oxide Overview" dashboard preloaded).
+#### Port map
+
+| Port | Service |
+|---|---|
+| 3000 | `web/` control panel (Next.js dev server) |
+| 3001 | Oxide API (Axum) |
+| 3002 | Grafana |
+| 5432 | Postgres |
+| 6379 | Redis |
+| 8000 | Pingora proxy |
+| 9090 | Prometheus |
 
 ### Run Tests
 

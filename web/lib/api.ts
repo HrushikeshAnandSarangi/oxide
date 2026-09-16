@@ -1,15 +1,16 @@
 export interface CreateProjectRequest {
   name: string;
   subdomain: string;
+  repo_url?: string;
 }
 
 export interface CreateProjectResponse {
   message: string;
+  project_id: string;
 }
 
 export interface DeploymentRequest {
   subdomain: string;
-  repo_url: string;
 }
 
 export const api = {
