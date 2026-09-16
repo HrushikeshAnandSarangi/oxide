@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    name: Format check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        # Deny everything except unwrap_used/expect_used, which the
+        # workspace's own Cargo.toml already declares as warn (not deny) —
+        # CI shouldn't be stricter than the project's own stated lint policy.
+      - run: cargo clippy --workspace --all-targets -- -D warnings -A clippy::unwrap_used -A clippy::expect_used
+
+  build-and-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --workspace
+      # No Postgres/Docker/Nix service needed: all queries in db/ use
+      # runtime-checked sqlx::query()/query_as(), not the compile-time
+      # query!() macro, and the unit test suite (proxy/common/builder)
+      # doesn't touch external services.
+      - run: cargo test --workspace --lib
+
+  benches-compile:
+    name: Benchmarks compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Compile-only: keeps the benchmark suites from silently rotting
+      # without paying for a full `cargo bench` run on every push.
+      - run: cargo check --workspace --benches

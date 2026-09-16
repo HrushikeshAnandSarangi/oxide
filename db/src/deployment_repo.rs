@@ -1,16 +1,16 @@
 use domain::Deployment;
-use sqlx::{PgPool, Result};
 use domain::DeploymentStatus;
+use sqlx::{PgPool, Result};
 use uuid::Uuid;
-pub struct DeploymentRepository{
-    pool:PgPool,
+pub struct DeploymentRepository {
+    pool: PgPool,
 }
 
 impl DeploymentRepository {
-    pub fn new(pool:PgPool)->Self{
-        Self{pool}
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
     }
-    pub async fn create(&self,deployment:&Deployment)->Result<(),sqlx::Error>{
+    pub async fn create(&self, deployment: &Deployment) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
             INSERT INTO deployments(id,project_id,version,artifact_path,docker_image,container_id,status,created_at)
@@ -30,42 +30,54 @@ impl DeploymentRepository {
         Ok(())
     }
 
-    pub async fn set_container_info(&self,id:&Uuid,container_id:&str,port:u16)->Result<(),sqlx::Error>{
+    pub async fn set_container_info(
+        &self,
+        id: &Uuid,
+        container_id: &str,
+        port: u16,
+    ) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
             UPDATE deployments
             SET container_id = $1, container_port = $2
             WHERE id = $3
-            "#
+            "#,
         )
-            .bind(container_id)
-            .bind(port as i32)
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+        .bind(container_id)
+        .bind(port as i32)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 
-    pub async fn update_status(&self,id:&Uuid,status:DeploymentStatus)->Result<(),sqlx::Error>{
+    pub async fn update_status(
+        &self,
+        id: &Uuid,
+        status: DeploymentStatus,
+    ) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
             UPDATE deployments
             SET status = $1
             WHERE id = $2
-            "#
+            "#,
         )
-            .bind(format!("{:?}",status))
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
+        .bind(format!("{:?}", status))
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 
-    pub async fn find_by_id(&self, id: &Uuid) -> Result<Option<crate::models::DeploymentRow>, sqlx::Error> {
+    pub async fn find_by_id(
+        &self,
+        id: &Uuid,
+    ) -> Result<Option<crate::models::DeploymentRow>, sqlx::Error> {
         sqlx::query_as::<_, crate::models::DeploymentRow>(
             r#"
             SELECT * FROM deployments WHERE id = $1
-            "#
+            "#,
         )
         .bind(id)
         .fetch_optional(&self.pool)
@@ -74,31 +86,34 @@ impl DeploymentRepository {
 
     pub async fn list_all(&self) -> Result<Vec<crate::models::DeploymentRow>, sqlx::Error> {
         sqlx::query_as::<_, crate::models::DeploymentRow>(
-            "SELECT * FROM deployments ORDER BY created_at DESC"
+            "SELECT * FROM deployments ORDER BY created_at DESC",
         )
         .fetch_all(&self.pool)
         .await
     }
 
-    pub async fn get_running_deployments(&self)->Result<Vec<(String,u16)>,sqlx::Error>{
+    pub async fn get_running_deployments(&self) -> Result<Vec<(String, u16)>, sqlx::Error> {
         use sqlx::Row;
-        let records=sqlx::query(
-        r#"
+        let records = sqlx::query(
+            r#"
         SELECT p.subdomain, d.container_port
         FROM deployments d
         JOIN projects p ON d.project_id= p.id 
         WHERE d.status = 'Running' AND d.container_port IS NOT NULL
-        "#
+        "#,
         )
-            .fetch_all(&self.pool)
-            .await?;
+        .fetch_all(&self.pool)
+        .await?;
 
-        let routes=records.into_iter().map(|r|{
-            let subdomain: String = r.get("subdomain");
-            // PostgreSQL integer is usually mapped to i32 in sqlx
-            let container_port: i32 = r.get("container_port");
-            (subdomain, container_port as u16)
-        }).collect();
+        let routes = records
+            .into_iter()
+            .map(|r| {
+                let subdomain: String = r.get("subdomain");
+                // PostgreSQL integer is usually mapped to i32 in sqlx
+                let container_port: i32 = r.get("container_port");
+                (subdomain, container_port as u16)
+            })
+            .collect();
         Ok(routes)
     }
 }

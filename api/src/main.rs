@@ -1,23 +1,23 @@
-pub mod router;
 pub mod handlers;
+pub mod router;
 pub mod state;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    use std::sync::Arc;
-    use tokio::net::TcpListener;
     use anyhow::Context;
     use sqlx::postgres::PgPoolOptions;
-    
-    use db::deployment_repo::DeploymentRepository;
-    use builder::Builder;
-    use runtime::runtime::Runtime;
-    use proxy::state::ProxyState;
-    use controller::state::ControlState;
-    use controller::main_controller::ControlPlane;
-    use common::logging;
+    use std::sync::Arc;
+    use tokio::net::TcpListener;
+
     use crate::router::create_router;
     use crate::state::AppState;
+    use builder::Builder;
+    use common::logging;
+    use controller::main_controller::ControlPlane;
+    use controller::state::ControlState;
+    use db::deployment_repo::DeploymentRepository;
+    use proxy::state::ProxyState;
+    use runtime::runtime::Runtime;
 
     logging::init();
     tracing::info!("Starting Oxide Platform...");
@@ -38,12 +38,14 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Initializing subsystems (Builder, Runtime, Proxy)...");
     let builder_path = std::path::PathBuf::from("/var/oxide/builds");
     let builder = Arc::new(Builder::new(builder_path));
-    
+
     let runtime_path = std::path::PathBuf::from("/var/oxide/runtime");
-    let runtime = Arc::new(Runtime::new(runtime_path).context("Failed to initialize Docker runtime")?);
+    let runtime =
+        Arc::new(Runtime::new(runtime_path).context("Failed to initialize Docker runtime")?);
     let proxy_state = Arc::new(ProxyState::new());
 
-    let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+    let redis_url =
+        std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
     let events = match common::events::EventPublisher::connect(&redis_url).await {
         Ok(publisher) => {
             tracing::info!("Connected to Redis for telemetry at {}", redis_url);
@@ -91,11 +93,15 @@ async fn main() -> anyhow::Result<()> {
         let state_clone = proxy_state_clone.clone();
         tokio::task::spawn_blocking(move || {
             proxy::proxy::start_proxy((*state_clone).clone());
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
     });
 
     let api_handle = tokio::spawn(async move {
-        let listener = TcpListener::bind("0.0.0.0:3001").await.expect("Failed to bind API port");
+        let listener = TcpListener::bind("0.0.0.0:3001")
+            .await
+            .expect("Failed to bind API port");
         tracing::info!("API Server listening on 0.0.0.0:3001");
         if let Err(e) = axum::serve(listener, app).await {
             tracing::error!("API Server error: {}", e);

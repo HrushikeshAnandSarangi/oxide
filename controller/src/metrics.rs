@@ -1,8 +1,8 @@
 use std::sync::LazyLock;
 
 use prometheus::{
-    register_histogram, register_int_counter, register_int_counter_vec, register_int_gauge,
-    Encoder, Histogram, IntCounter, IntCounterVec, IntGauge, TextEncoder,
+    Encoder, Histogram, IntCounter, IntCounterVec, IntGauge, TextEncoder, register_histogram,
+    register_int_counter, register_int_counter_vec, register_int_gauge,
 };
 
 pub static DEPLOYMENTS_TOTAL: LazyLock<IntCounterVec> = LazyLock::new(|| {

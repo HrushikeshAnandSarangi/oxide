@@ -1,7 +1,7 @@
 use thiserror::Error;
 
-#[derive(Error,Debug)]
-pub enum OxideError{
+#[derive(Error, Debug)]
+pub enum OxideError {
     #[error("Configuration error: {0}")]
     Config(String),
 

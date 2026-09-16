@@ -651,6 +651,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "config",
+ "criterion",
  "rand 0.8.5",
  "redis",
  "serde",
@@ -816,7 +817,6 @@ dependencies = [
  "ciborium",
  "clap",
  "criterion-plot",
- "futures",
  "is-terminal",
  "itertools 0.10.5",
  "num-traits",
@@ -829,7 +829,6 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tinytemplate",
- "tokio",
  "walkdir",
 ]
 
@@ -2825,6 +2824,7 @@ name = "proxy"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "criterion",
  "dashmap",
  "pingora",
  "pingora-core",

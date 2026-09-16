@@ -1,5 +1,7 @@
 # Oxide
 
+[![CI](https://github.com/HrushikeshAnandSarangi/oxide/actions/workflows/ci.yml/badge.svg)](https://github.com/HrushikeshAnandSarangi/oxide/actions/workflows/ci.yml)
+
 > Infrastructure as software — deterministic builds with Nix, isolated runtimes with Docker, proxied with Pingora.
 
 Oxide is a self-hosted application deployment platform built entirely in Rust. It solves the version mismatch problem at the build layer using Nix for reproducible, deterministic builds, and isolates runtime concerns separately using Docker — two tools doing two distinct jobs rather than one tool doing both poorly.
@@ -156,5 +158,13 @@ Grafana is at `http://localhost:3000` (anonymous admin access, "Oxide Overview" 
 ```bash
 cargo test --workspace
 ```
+
+### Benchmarks
+
+```bash
+cargo bench --workspace
+```
+
+See [benchmarks.md](benchmarks.md) for measured results (proxy routing, crypto, metrics encoding).
 
 ---

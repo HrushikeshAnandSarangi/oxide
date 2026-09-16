@@ -8,10 +8,10 @@
 //! Load: writes a row into Postgres' `deployment_events` table for
 //! historical analytics, independent of the live Prometheus metrics.
 
-use common::events::{DeploymentEvent, DEPLOYMENT_STREAM};
+use common::events::{DEPLOYMENT_STREAM, DeploymentEvent};
 use db::telemetry_repo::TelemetryRepository;
-use redis::streams::{StreamReadOptions, StreamReadReply};
 use redis::AsyncCommands;
+use redis::streams::{StreamReadOptions, StreamReadReply};
 
 const CONSUMER_GROUP: &str = "oxide-telemetry";
 const CONSUMER_NAME: &str = "telemetry-consumer-1";
@@ -23,7 +23,8 @@ async fn main() -> anyhow::Result<()> {
 
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/oxide".to_string());
-    let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+    let redis_url =
+        std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
 
     let pool = db::create_pool(&database_url).await?;
     let repo = TelemetryRepository::new(pool);
@@ -36,10 +37,10 @@ async fn main() -> anyhow::Result<()> {
     let created: Result<(), redis::RedisError> = conn
         .xgroup_create_mkstream(DEPLOYMENT_STREAM, CONSUMER_GROUP, "$")
         .await;
-    if let Err(e) = created {
-        if !e.to_string().contains("BUSYGROUP") {
-            return Err(e.into());
-        }
+    if let Err(e) = created
+        && !e.to_string().contains("BUSYGROUP")
+    {
+        return Err(e.into());
     }
 
     let opts = StreamReadOptions::default()
@@ -95,7 +96,11 @@ async fn main() -> anyhow::Result<()> {
                 }
 
                 let _: Result<i64, _> = conn
-                    .xack(DEPLOYMENT_STREAM, CONSUMER_GROUP, &[stream_id.id.clone()])
+                    .xack(
+                        DEPLOYMENT_STREAM,
+                        CONSUMER_GROUP,
+                        std::slice::from_ref(&stream_id.id),
+                    )
                     .await;
             }
         }

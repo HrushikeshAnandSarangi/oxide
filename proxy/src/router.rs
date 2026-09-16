@@ -1,16 +1,16 @@
 use crate::state::ProxyState;
 
-pub fn resolve_target(host:&str,state:&ProxyState)->Option<String>{
-    let parts : Vec<&str>=host.split(".").collect();
-    if parts.is_empty(){
+pub fn resolve_target(host: &str, state: &ProxyState) -> Option<String> {
+    let parts: Vec<&str> = host.split(".").collect();
+    if parts.is_empty() {
         return None;
     }
 
-    let subdomain=parts[0];
+    let subdomain = parts[0];
 
-    let port=state.get_port(subdomain)?;
+    let port = state.get_port(subdomain)?;
 
-    Some(format!("127.0.0.1:{}",port))
+    Some(format!("127.0.0.1:{}", port))
 }
 
 #[cfg(test)]
@@ -21,7 +21,10 @@ mod tests {
     fn resolves_registered_subdomain_from_host_header() {
         let state = ProxyState::new();
         state.add_route("demo".to_string(), 5050);
-        assert_eq!(resolve_target("demo.oxide.dev", &state), Some("127.0.0.1:5050".to_string()));
+        assert_eq!(
+            resolve_target("demo.oxide.dev", &state),
+            Some("127.0.0.1:5050".to_string())
+        );
     }
 
     #[test]

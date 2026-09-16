@@ -12,17 +12,17 @@ pub struct ProjectEnvVarRow {
 }
 
 #[derive(sqlx::FromRow, serde::Serialize)]
-pub struct ProjectRow{
-    pub id:Uuid,
-    pub name:String,
-    pub subdomain:String,
-    pub repo_url:Option<String>,
-    pub install_command:Option<String>,
-    pub build_command:Option<String>,
-    pub run_command:Option<String>,
-    pub root_directory:Option<String>,
-    pub active_deployment_id:Option<Uuid>,
-    pub created_at:DateTime<Utc>
+pub struct ProjectRow {
+    pub id: Uuid,
+    pub name: String,
+    pub subdomain: String,
+    pub repo_url: Option<String>,
+    pub install_command: Option<String>,
+    pub build_command: Option<String>,
+    pub run_command: Option<String>,
+    pub root_directory: Option<String>,
+    pub active_deployment_id: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(sqlx::FromRow, serde::Serialize)]
@@ -38,15 +38,14 @@ pub struct DeploymentEventRow {
 }
 
 #[derive(sqlx::FromRow, serde::Serialize)]
-pub struct DeploymentRow{
+pub struct DeploymentRow {
     pub id: Uuid,
-    pub project_id:Uuid,
-    pub version:String,
-    pub artifact_path:Option<String>,
-    pub docker_image:Option<String>,
-    pub container_id:Option<String>,
-    pub container_port:Option<i32>,
-    pub status:String,
-    pub created_at:DateTime<Utc>,
+    pub project_id: Uuid,
+    pub version: String,
+    pub artifact_path: Option<String>,
+    pub docker_image: Option<String>,
+    pub container_id: Option<String>,
+    pub container_port: Option<i32>,
+    pub status: String,
+    pub created_at: DateTime<Utc>,
 }
-

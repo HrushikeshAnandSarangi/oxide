@@ -1,0 +1,9 @@
+# Normalize line endings to LF regardless of which OS/git checks the repo
+# out — this project is developed from both Windows (Claude Code) and
+# WSL2/Linux (cargo, docker, CI), and without this the two environments'
+# core.autocrlf settings disagree and every file looks "modified".
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary

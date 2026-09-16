@@ -1,10 +1,10 @@
-use std::sync::Arc;
+use crate::router::resolve_target;
+use crate::state::ProxyState;
 use async_trait::async_trait;
 use pingora_core::prelude::*;
 use pingora_core::upstreams::peer::HttpPeer;
-use pingora_proxy::{http_proxy_service, ProxyHttp, Session};
-use crate::router::resolve_target;
-use crate::state::ProxyState;
+use pingora_proxy::{ProxyHttp, Session, http_proxy_service};
+use std::sync::Arc;
 
 pub fn start_proxy(state: ProxyState) {
     let mut server = Server::new(None).unwrap();
@@ -25,9 +25,7 @@ struct OxideProxy {
 impl ProxyHttp for OxideProxy {
     type CTX = ();
 
-    fn new_ctx(&self) -> Self::CTX {
-        ()
-    }
+    fn new_ctx(&self) -> Self::CTX {}
 
     async fn upstream_peer(
         &self,

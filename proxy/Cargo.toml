@@ -14,3 +14,10 @@ tracing = "0.1.44"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "routing_bench"
+harness = false
