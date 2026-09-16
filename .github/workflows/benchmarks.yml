@@ -1,0 +1,44 @@
+name: Benchmarks
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  bench:
+    name: Run benchmarks and update benchmarks.md
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Real statistical run (not --check), same as a local `cargo bench --workspace`.
+      - name: Run benchmarks
+        run: cargo bench --workspace
+
+      - name: Update benchmarks.md from Criterion output
+        run: node scripts/update_benchmarks.mjs
+
+      - name: Commit and push updated benchmarks.md
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- benchmarks.md; then
+            echo "No benchmark changes to commit."
+            exit 0
+          fi
+          git add benchmarks.md
+          git commit -m "chore: update benchmarks.md for ${{ github.event.release.tag_name || 'manual run' }} [skip ci]"
+          git push origin HEAD:main

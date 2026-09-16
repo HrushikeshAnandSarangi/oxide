@@ -1,0 +1,8 @@
+# The "naive baseline" most tutorials and quick setups actually ship without
+# Nix: build and run in the same full SDK image, nothing multi-stage.
+FROM rust:1-bookworm
+WORKDIR /app
+COPY . .
+RUN cargo build --release
+EXPOSE 3000
+CMD ["target/release/server"]
