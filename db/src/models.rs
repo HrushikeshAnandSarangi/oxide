@@ -21,6 +21,7 @@ pub struct ProjectRow {
     pub build_command: Option<String>,
     pub run_command: Option<String>,
     pub root_directory: Option<String>,
+    pub auto_generate_flake: bool,
     pub active_deployment_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
 }

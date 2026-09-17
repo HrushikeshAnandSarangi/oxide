@@ -13,8 +13,8 @@ impl ProjectRepository {
     pub async fn create(&self, project: &Project) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
-            INSERT INTO projects (id, name, subdomain, repo_url, install_command, build_command, run_command, root_directory, active_deployment_id, created_at)
-            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+            INSERT INTO projects (id, name, subdomain, repo_url, install_command, build_command, run_command, root_directory, auto_generate_flake, active_deployment_id, created_at)
+            VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
             "#
         ).bind(project.id)
         .bind(&project.name)
@@ -24,6 +24,7 @@ impl ProjectRepository {
         .bind(&project.build_command)
         .bind(&project.run_command)
         .bind(&project.root_directory)
+        .bind(project.auto_generate_flake)
         .bind(project.active_deployment_id)
         .bind(project.created_at)
         .execute(&self.pool).await?;

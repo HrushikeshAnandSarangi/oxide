@@ -85,15 +85,16 @@ Tools like Docker are often used for both. This works but at the cost of large i
 - **Health monitoring** — periodic per-deployment health checks with automatic route removal and status update on failure
 - **Prometheus metrics + Grafana dashboards** — deploy counts by status, build duration, active containers, health-check failures; `docker compose up -d` brings up the whole stack locally
 - **Telemetry ETL (Redis Streams)** — deployment lifecycle events are streamed via Redis and loaded into a Postgres event log by the `telemetry` consumer, for historical analytics independent of live metrics
-- **Tests** — unit coverage for proxy routing/state, crypto round-trips, and Nix artifact resolution
+- **Auto-generated Nix flakes** — opt-in per project (`auto_generate_flake`): if a repo has a Dockerfile but no flake.nix, Oxide detects the language (Rust, Go, TypeScript, JavaScript, Python) and generates one at build time. Rust/Go/TS/JS builds are fully hermetic; Python's `pip install` runs with network access during the build (not fully reproducible — see [benchmarks.md](benchmarks.md)) since there's no nixpkgs-native equivalent of Go's vendored-hash pattern for arbitrary `requirements.txt`. See [builder/src/flake_gen.rs](builder/src/flake_gen.rs).
+- **Tests** — unit coverage for proxy routing/state, crypto round-trips, Nix artifact resolution, and flake-template generation; a live end-to-end test (`builder/tests/live_flake_gen.rs`, `#[ignore]`d by default) verifies a generated Rust flake actually builds with real Nix
+- **CI/CD** — GitHub Actions: format check, clippy, build, test on every push/PR; benchmarks re-run and commit fresh numbers on every GitHub Release
+- **Benchmarks** — proxy routing, crypto, metrics-endpoint microbenchmarks (Criterion) plus a real measured Nix-vs-naive-Docker container size comparison — see [benchmarks.md](benchmarks.md)
 
 ### In Progress
 
 - **Single VM end-to-end deployment** — full pipeline from source to running container on Ubuntu VM
-- **CI/CD pipeline** — GitHub Actions for automated build and deployment
-- **Linting and formatting** — `clippy` + `rustfmt` enforced
-- **Benchmarks** — Pingora routing and Axum endpoint throughput
 - **Integration tests** — full deploy() pipeline against a real Postgres/Docker/Nix environment
+- **Live-verify the Go/TypeScript/JavaScript/Python flake generators** — only the Rust path has been build-verified end-to-end so far; the others are unit-tested (template correctness) but not yet proven against a real dependency-having repo
 
 ### Planned
 

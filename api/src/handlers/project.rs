@@ -12,6 +12,10 @@ pub struct CreateProjectRequest {
     pub build_command: Option<String>,
     pub run_command: Option<String>,
     pub root_directory: Option<String>,
+    /// Opt-in: if the repo has a Dockerfile but no flake.nix, generate one
+    /// automatically at build time. Defaults to off.
+    #[serde(default)]
+    pub auto_generate_flake: bool,
     pub env_vars: Option<std::collections::HashMap<String, String>>,
 }
 
@@ -43,6 +47,7 @@ pub async fn create_project(
         payload.build_command,
         payload.run_command,
         payload.root_directory,
+        payload.auto_generate_flake,
     );
 
     state

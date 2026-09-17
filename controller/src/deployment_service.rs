@@ -104,7 +104,12 @@ impl DeploymentService {
         ))
         .await;
         let build_start = Instant::now();
-        let artifact = match self.state.builder.build(&repo_url, deployment_id).await {
+        let artifact = match self
+            .state
+            .builder
+            .build(&repo_url, deployment_id, project.auto_generate_flake)
+            .await
+        {
             Ok(artifact) => artifact,
             Err(e) => {
                 let _ = self

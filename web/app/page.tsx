@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [name, setName] = useState("");
   const [subdomain, setSubdomain] = useState("");
   const [repoUrl, setRepoUrl] = useState("");
+  const [autoGenerateFlake, setAutoGenerateFlake] = useState(false);
   const [deploySubdomain, setDeploySubdomain] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
@@ -41,11 +42,17 @@ export default function Dashboard() {
     setIsLoading(true);
     setMessage(null);
     try {
-      const res = await api.createProject({ name, subdomain, repo_url: repoUrl || undefined });
+      const res = await api.createProject({
+        name,
+        subdomain,
+        repo_url: repoUrl || undefined,
+        auto_generate_flake: autoGenerateFlake,
+      });
       setMessage({ type: "success", text: res.message || "Project created successfully!" });
       setName("");
       setSubdomain("");
       setRepoUrl("");
+      setAutoGenerateFlake(false);
     } catch (err: any) {
       setMessage({ type: "error", text: err.message || "Failed to create project" });
     } finally {
@@ -205,8 +212,22 @@ export default function Dashboard() {
                   onChange={(e) => setRepoUrl(e.target.value)}
                   className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-medium"
                 />
-                <p className="text-xs text-neutral-500 mt-1 pl-1">Must contain a Nix flake whose build output has a Dockerfile at its root. Can be added later.</p>
+                <p className="text-xs text-neutral-500 mt-1 pl-1">Needs a flake.nix at build time — either already in the repo, or generated automatically below. Can be added later.</p>
               </div>
+              <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={autoGenerateFlake}
+                  onChange={(e) => setAutoGenerateFlake(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded border-white/20 bg-black/50 accent-indigo-500"
+                />
+                <span>
+                  <span className="text-sm font-medium text-neutral-200 block">Auto-generate a Nix flake from the Dockerfile</span>
+                  <span className="text-xs text-neutral-500 block mt-0.5">
+                    Only used if the repo has a Dockerfile but no flake.nix yet. Supports Rust, Go, TypeScript, JavaScript, and Python (Python builds are not fully reproducible — see benchmarks.md).
+                  </span>
+                </span>
+              </label>
               <div className="pt-2">
                 <button
                   type="submit"

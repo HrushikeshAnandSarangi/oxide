@@ -2,6 +2,7 @@ export interface CreateProjectRequest {
   name: string;
   subdomain: string;
   repo_url?: string;
+  auto_generate_flake?: boolean;
 }
 
 export interface CreateProjectResponse {

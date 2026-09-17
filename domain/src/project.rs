@@ -23,11 +23,17 @@ pub struct Project {
     pub build_command: Option<String>,
     pub run_command: Option<String>,
     pub root_directory: Option<String>,
+    /// Opt-in: if the repo has a Dockerfile but no flake.nix, generate one
+    /// automatically at build time (see builder::detect / builder::flake_gen).
+    /// Off by default — this is a deliberate choice by whoever deploys the
+    /// project, not something Oxide does just because it noticed a Dockerfile.
+    pub auto_generate_flake: bool,
     pub active_deployment_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
 }
 
 impl Project {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         name: String,
         subdomain: Subdomain,
@@ -36,6 +42,7 @@ impl Project {
         build_command: Option<String>,
         run_command: Option<String>,
         root_directory: Option<String>,
+        auto_generate_flake: bool,
     ) -> Self {
         Self {
             id: Uuid::new_v4(),
@@ -46,6 +53,7 @@ impl Project {
             build_command,
             run_command,
             root_directory,
+            auto_generate_flake,
             active_deployment_id: None,
             created_at: Utc::now(),
         }
