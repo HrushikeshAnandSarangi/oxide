@@ -1,309 +1,322 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { api } from "../lib/api";
-import {
-  Activity,
-  Server,
-  Box,
-  Rocket,
-  PlusCircle,
-  AlertCircle,
-  CheckCircle2,
-} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { api, type Deployment, type DeploymentStatus, type Project } from "../lib/api";
+import { Activity, AlertCircle, Box, Plus, Rocket } from "lucide-react";
+
+const STATUS_STYLES: Record<DeploymentStatus, string> = {
+  Running: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+  Queued: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+  Building: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+  ImageBuilding: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+  ContainerStarting: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+  BuildFailed: "bg-red-500/10 text-red-400 border-red-500/30",
+  Crashed: "bg-red-500/10 text-red-400 border-red-500/30",
+  Stopped: "bg-slate-500/10 text-slate-400 border-slate-500/30",
+};
+
+function StatusBadge({ status }: { status: DeploymentStatus }) {
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${STATUS_STYLES[status]}`}>
+      {status}
+    </span>
+  );
+}
+
+function formatTimestamp(iso: string): string {
+  return new Date(iso).toLocaleString();
+}
 
 export default function Dashboard() {
   const [healthStatus, setHealthStatus] = useState<"checking" | "healthy" | "error">("checking");
-  const [activeTab, setActiveTab] = useState<"create" | "deploy">("create");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [deployments, setDeployments] = useState<Deployment[]>([]);
+  const [selectedSubdomain, setSelectedSubdomain] = useState<string | null>(null);
+  const [showNewProject, setShowNewProject] = useState(false);
 
-  // Form states
   const [name, setName] = useState("");
   const [subdomain, setSubdomain] = useState("");
   const [repoUrl, setRepoUrl] = useState("");
   const [autoGenerateFlake, setAutoGenerateFlake] = useState(false);
-  const [deploySubdomain, setDeploySubdomain] = useState("");
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      const [projectList, deploymentList] = await Promise.all([
+        api.listProjects(),
+        api.listDeployments(),
+      ]);
+      setProjects(projectList);
+      setDeployments(deploymentList);
+    } catch {
+      // Non-fatal — the health indicator already surfaces API outages.
+    }
+  }, []);
 
   useEffect(() => {
     const checkHealth = async () => {
       const isHealthy = await api.checkHealth();
       setHealthStatus(isHealthy ? "healthy" : "error");
     };
-
     checkHealth();
-    const interval = setInterval(checkHealth, 30000);
+    refresh();
+    const interval = setInterval(() => {
+      checkHealth();
+      refresh();
+    }, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [refresh]);
 
-  const handleCreateProject = async (e: React.FormEvent) => {
+  const resetForm = () => {
+    setName("");
+    setSubdomain("");
+    setRepoUrl("");
+    setAutoGenerateFlake(false);
+  };
+
+  const handleCreateAndDeploy = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsSubmitting(true);
     setMessage(null);
     try {
-      const res = await api.createProject({
+      await api.createProject({
         name,
         subdomain,
         repo_url: repoUrl || undefined,
         auto_generate_flake: autoGenerateFlake,
       });
-      setMessage({ type: "success", text: res.message || "Project created successfully!" });
-      setName("");
-      setSubdomain("");
-      setRepoUrl("");
-      setAutoGenerateFlake(false);
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message || "Failed to create project" });
+      if (repoUrl) {
+        await api.deployProject({ subdomain });
+        setMessage({ type: "success", text: `${subdomain} created and deployment started` });
+      } else {
+        setMessage({ type: "success", text: `${subdomain} created` });
+      }
+      resetForm();
+      setShowNewProject(false);
+      refresh();
+    } catch (err: unknown) {
+      const text = err instanceof Error ? err.message : "Failed to create project";
+      setMessage({ type: "error", text });
     } finally {
-      setIsLoading(false);
+      setIsSubmitting(false);
     }
   };
 
-  const handleDeployProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+  const handleRedeploy = async (targetSubdomain: string) => {
     setMessage(null);
     try {
-      const res = await api.deployProject({ subdomain: deploySubdomain });
-      setMessage({ type: "success", text: res || "Deployment started successfully!" });
-      setDeploySubdomain("");
-    } catch (err: any) {
-      setMessage({ type: "error", text: err.message || "Failed to start deployment" });
-    } finally {
-      setIsLoading(false);
+      await api.deployProject({ subdomain: targetSubdomain });
+      setMessage({ type: "success", text: `Deployment started for ${targetSubdomain}` });
+      refresh();
+    } catch (err: unknown) {
+      const text = err instanceof Error ? err.message : "Failed to start deployment";
+      setMessage({ type: "error", text });
     }
   };
 
+  const projectBySubdomain = new Map(projects.map((p) => [p.id, p.subdomain]));
+  const visibleDeployments = selectedSubdomain
+    ? deployments.filter((d) => projectBySubdomain.get(d.project_id) === selectedSubdomain)
+    : deployments;
+
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 font-sans selection:bg-indigo-500/30">
-      
-      {/* Decorative background gradients */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-600/20 blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-blue-600/20 blur-[120px]" />
-      </div>
-
-      <nav className="relative z-10 border-b border-white/10 bg-black/40 backdrop-blur-xl">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Box className="w-6 h-6 text-indigo-500" />
-            <span className="font-semibold text-xl tracking-tight">Oxide Platform</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <div
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border ${
-                healthStatus === "healthy"
-                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                  : healthStatus === "error"
-                  ? "bg-red-500/10 text-red-400 border-red-500/20"
-                  : "bg-neutral-500/10 text-neutral-400 border-neutral-500/20"
-              }`}
-            >
-              {healthStatus === "healthy" ? (
-                <Activity className="w-3.5 h-3.5" />
-              ) : healthStatus === "error" ? (
-                <AlertCircle className="w-3.5 h-3.5" />
-              ) : (
-                <Activity className="w-3.5 h-3.5 animate-pulse" />
-              )}
-              {healthStatus === "healthy" ? "API Online" : healthStatus === "error" ? "API Offline" : "Connecting..."}
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      <main className="relative z-10 max-w-4xl mx-auto px-6 py-12">
-        <div className="mb-12 text-center sm:text-left">
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4">
-            Deploy your code
-            <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-blue-400">
-              in seconds.
-            </span>
-          </h1>
-          <p className="text-neutral-400 text-lg max-w-2xl">
-            Oxide makes it trivial to spin up environments, configure routes, and deploy applications without the headache of manual orchestration.
-          </p>
+    <div className="min-h-screen flex bg-slate-900 text-slate-100">
+      <aside className="w-64 shrink-0 bg-slate-950 border-r border-slate-800 flex flex-col">
+        <div className="h-16 flex items-center gap-2 px-5 border-b border-slate-800">
+          <Box className="w-5 h-5 text-emerald-400" />
+          <span className="font-semibold tracking-tight">Oxide</span>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex bg-neutral-900/50 p-1 rounded-xl border border-white/10 w-full sm:w-fit mb-8 backdrop-blur-md">
+        <div className="p-3">
           <button
-            onClick={() => { setActiveTab("create"); setMessage(null); }}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              activeTab === "create"
-                ? "bg-indigo-500 text-white shadow-lg"
-                : "text-neutral-400 hover:text-white hover:bg-white/5"
-            }`}
+            onClick={() => {
+              setShowNewProject((v) => !v);
+              setMessage(null);
+            }}
+            className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-medium text-sm rounded-lg py-2.5 transition-colors"
           >
-            <PlusCircle className="w-4 h-4" />
-            Create Project
-          </button>
-          <button
-            onClick={() => { setActiveTab("deploy"); setMessage(null); }}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium transition-all ${
-              activeTab === "deploy"
-                ? "bg-blue-500 text-white shadow-lg"
-                : "text-neutral-400 hover:text-white hover:bg-white/5"
-            }`}
-          >
-            <Rocket className="w-4 h-4" />
-            Start Deployment
+            <Plus className="w-4 h-4" />
+            New Project
           </button>
         </div>
 
-        {/* Form Container */}
-        <div className="bg-neutral-900/40 border border-white/10 rounded-2xl p-6 sm:p-8 backdrop-blur-xl relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent pointer-events-none" />
-          
-          {message && (
-            <div
-              className={`mb-6 p-4 rounded-xl border flex items-start gap-3 ${
-                message.type === "success"
-                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                  : "bg-red-500/10 border-red-500/20 text-red-400"
+        <nav className="flex-1 overflow-y-auto px-3 pb-3">
+          <button
+            onClick={() => setSelectedSubdomain(null)}
+            className={`w-full text-left px-3 py-2 rounded-lg text-sm mb-1 transition-colors ${
+              selectedSubdomain === null ? "bg-slate-800 text-slate-100" : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"
+            }`}
+          >
+            All deployments
+          </button>
+          {projects.map((project) => (
+            <button
+              key={project.id}
+              onClick={() => setSelectedSubdomain(project.subdomain)}
+              className={`w-full text-left px-3 py-2 rounded-lg mb-1 transition-colors ${
+                selectedSubdomain === project.subdomain
+                  ? "bg-slate-800 text-slate-100"
+                  : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"
               }`}
             >
-              {message.type === "success" ? (
-                <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
-              ) : (
-                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-              )}
-              <div className="text-sm font-medium leading-relaxed">{message.text}</div>
-            </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    project.active_deployment_id ? "bg-emerald-400" : "bg-slate-600"
+                  }`}
+                />
+                <span className="text-sm font-medium truncate">{project.name}</span>
+              </div>
+              <div className="text-xs text-slate-500 pl-3.5 truncate">{project.subdomain}</div>
+            </button>
+          ))}
+          {projects.length === 0 && (
+            <p className="text-xs text-slate-600 px-3 py-2">No projects yet</p>
           )}
+        </nav>
 
-          {activeTab === "create" ? (
-            <form onSubmit={handleCreateProject} className="space-y-5 relative">
+        <div className="p-3 border-t border-slate-800 flex items-center gap-2 text-xs">
+          {healthStatus === "healthy" ? (
+            <Activity className="w-3.5 h-3.5 text-emerald-400" />
+          ) : (
+            <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+          )}
+          <span className={healthStatus === "healthy" ? "text-emerald-400" : "text-red-400"}>
+            {healthStatus === "healthy" ? "API online" : healthStatus === "error" ? "API offline" : "Connecting"}
+          </span>
+        </div>
+      </aside>
+
+      <main className="flex-1 min-w-0 p-8">
+        {message && (
+          <div
+            className={`mb-6 px-4 py-3 rounded-lg border text-sm ${
+              message.type === "success"
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                : "bg-red-500/10 border-red-500/30 text-red-400"
+            }`}
+          >
+            {message.text}
+          </div>
+        )}
+
+        {showNewProject && (
+          <form
+            onSubmit={handleCreateAndDeploy}
+            className="mb-8 bg-slate-800/40 border border-slate-700 rounded-xl p-6 space-y-4"
+          >
+            <h2 className="text-sm font-semibold text-slate-200">New Project</h2>
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-neutral-300">Project Name</label>
+                <label className="text-xs font-medium text-slate-400">Name</label>
                 <input
                   required
                   type="text"
-                  placeholder="e.g., My Awesome App"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-medium"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm font-medium text-neutral-300">Subdomain</label>
-                <div className="flex">
-                  <input
-                    required
-                    type="text"
-                    placeholder="e.g., awesome-app"
-                    value={subdomain}
-                    onChange={(e) => setSubdomain(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 border-r-0 rounded-l-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-medium"
-                  />
-                  <div className="bg-white/5 border border-white/10 rounded-r-xl px-4 py-3 text-neutral-400 flex items-center text-sm font-medium">
-                    .oxide.dev
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-neutral-300">Git Repository URL</label>
-                <input
-                  type="url"
-                  placeholder="https://github.com/user/repo"
-                  value={repoUrl}
-                  onChange={(e) => setRepoUrl(e.target.value)}
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-medium"
-                />
-                <p className="text-xs text-neutral-500 mt-1 pl-1">Needs a flake.nix at build time — either already in the repo, or generated automatically below. Can be added later.</p>
-              </div>
-              <label className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={autoGenerateFlake}
-                  onChange={(e) => setAutoGenerateFlake(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded border-white/20 bg-black/50 accent-indigo-500"
-                />
-                <span>
-                  <span className="text-sm font-medium text-neutral-200 block">Auto-generate a Nix flake from the Dockerfile</span>
-                  <span className="text-xs text-neutral-500 block mt-0.5">
-                    Only used if the repo has a Dockerfile but no flake.nix yet. Supports Rust, Go, TypeScript, JavaScript, and Python (Python builds are not fully reproducible — see benchmarks.md).
-                  </span>
-                </span>
-              </label>
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  disabled={isLoading || !name || !subdomain}
-                  className="bg-white text-black hover:bg-neutral-200 disabled:opacity-50 disabled:cursor-not-allowed w-full rounded-xl py-3 font-semibold transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_25px_rgba(255,255,255,0.2)] flex justify-center items-center gap-2"
-                >
-                  {isLoading ? (
-                    <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <PlusCircle className="w-5 h-5" />
-                      Create Project
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <form onSubmit={handleDeployProject} className="space-y-5 relative">
-              <div className="space-y-1.5">
-                <label className="text-sm font-medium text-neutral-300">Subdomain to Deploy</label>
+                <label className="text-xs font-medium text-slate-400">Subdomain</label>
                 <input
                   required
                   type="text"
-                  placeholder="e.g., awesome-app"
-                  value={deploySubdomain}
-                  onChange={(e) => setDeploySubdomain(e.target.value)}
-                  className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium"
+                  value={subdomain}
+                  onChange={(e) => setSubdomain(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 />
-                <p className="text-xs text-neutral-500 mt-1 pl-1">Deploys the repository URL already saved on this project (set it in Create Project).</p>
               </div>
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  disabled={isLoading || !deploySubdomain}
-                  className="bg-blue-500 text-white hover:bg-blue-400 disabled:opacity-50 disabled:cursor-not-allowed w-full rounded-xl py-3 font-semibold transition-all shadow-[0_0_20px_rgba(59,130,246,0.3)] hover:shadow-[0_0_25px_rgba(59,130,246,0.4)] flex justify-center items-center gap-2"
-                >
-                  {isLoading ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <Rocket className="w-5 h-5" />
-                      Start Deployment
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-slate-400">Git repository URL</label>
+              <input
+                type="url"
+                placeholder="https://github.com/user/repo"
+                value={repoUrl}
+                onChange={(e) => setRepoUrl(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              />
+            </div>
+            <label className="flex items-start gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={autoGenerateFlake}
+                onChange={(e) => setAutoGenerateFlake(e.target.checked)}
+                className="mt-0.5 w-3.5 h-3.5 rounded border-slate-600 bg-slate-900 accent-emerald-500"
+              />
+              <span className="text-xs text-slate-400">
+                Generate a Nix flake automatically if the repo has a Dockerfile but no flake.nix (Rust, Go, TypeScript, JavaScript, Python)
+              </span>
+            </label>
+            <div className="flex gap-3 pt-1">
+              <button
+                type="submit"
+                disabled={isSubmitting || !name || !subdomain}
+                className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed text-slate-950 text-sm font-medium rounded-lg px-4 py-2 transition-colors"
+              >
+                <Rocket className="w-4 h-4" />
+                {repoUrl ? "Create and deploy" : "Create project"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowNewProject(false)}
+                className="text-sm text-slate-400 hover:text-slate-200 px-4 py-2"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        <div className="flex items-center justify-between mb-4">
+          <h1 className="text-sm font-semibold text-slate-200">
+            {selectedSubdomain ? `Deployments — ${selectedSubdomain}` : "Deployments"}
+          </h1>
+          {selectedSubdomain && (
+            <button
+              onClick={() => handleRedeploy(selectedSubdomain)}
+              className="flex items-center gap-1.5 text-xs font-medium text-emerald-400 hover:text-emerald-300 border border-emerald-500/30 rounded-lg px-3 py-1.5"
+            >
+              <Rocket className="w-3.5 h-3.5" />
+              Redeploy
+            </button>
           )}
         </div>
-        
-        {/* Features/Stats Section at the bottom */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16">
-          <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col gap-3">
-            <div className="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 mb-2">
-              <Server className="w-5 h-5" />
-            </div>
-            <h3 className="font-semibold text-lg">Instant Infrastructure</h3>
-            <p className="text-neutral-400 text-sm leading-relaxed">Containers routed securely via Pingora, load balanced on the fly.</p>
-          </div>
-          <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col gap-3">
-            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 mb-2">
-              <Activity className="w-5 h-5" />
-            </div>
-            <h3 className="font-semibold text-lg">Continuous Monitoring</h3>
-            <p className="text-neutral-400 text-sm leading-relaxed">Deployment lifecycle mapped perfectly to persistent DB state.</p>
-          </div>
-          <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-col gap-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400 mb-2">
-              <Box className="w-5 h-5" />
-            </div>
-            <h3 className="font-semibold text-lg">Fully Automated</h3>
-            <p className="text-neutral-400 text-sm leading-relaxed">Built from repository URL automatically via Docker build system.</p>
-          </div>
-        </div>
 
+        <div className="border border-slate-800 rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-800/50 text-left text-xs text-slate-500">
+                <th className="px-4 py-3 font-medium">Status</th>
+                <th className="px-4 py-3 font-medium">Version</th>
+                <th className="px-4 py-3 font-medium">Port</th>
+                <th className="px-4 py-3 font-medium">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleDeployments.map((d) => (
+                <tr key={d.id} className="border-t border-slate-800">
+                  <td className="px-4 py-3">
+                    <StatusBadge status={d.status} />
+                  </td>
+                  <td className="px-4 py-3 text-slate-300 font-mono text-xs">{d.version}</td>
+                  <td className="px-4 py-3 text-slate-400">{d.container_port ?? "—"}</td>
+                  <td className="px-4 py-3 text-slate-500">{formatTimestamp(d.created_at)}</td>
+                </tr>
+              ))}
+              {visibleDeployments.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-slate-600 text-sm">
+                    No deployments yet
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </main>
     </div>
   );
