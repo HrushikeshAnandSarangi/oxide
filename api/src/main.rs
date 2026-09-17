@@ -79,12 +79,20 @@ async fn main() -> anyhow::Result<()> {
         events,
     };
 
+    // Cancelled once an OS shutdown signal arrives; every long-running task
+    // below watches it to stop accepting new work and wind down cleanly.
+    // The Pingora proxy is the one exception — it installs its own
+    // SIGTERM/SIGINT handlers internally (see common::shutdown::wait_for_signal
+    // for why) and isn't wired to this token.
+    let shutdown = tokio_util::sync::CancellationToken::new();
+
     let health_state = Arc::new(control_state.clone());
-    tokio::spawn(async move {
-        controller::health_monitor::start_health_monitor(health_state).await;
+    let health_shutdown = shutdown.clone();
+    let health_handle = tokio::spawn(async move {
+        controller::health_monitor::start_health_monitor(health_state, health_shutdown).await;
     });
 
-    let control_plane = Arc::new(ControlPlane::new(control_state));
+    let control_plane = Arc::new(ControlPlane::new(control_state, shutdown.clone()));
     let api_state = AppState { control_plane };
     let app = create_router(api_state);
 
@@ -98,26 +106,42 @@ async fn main() -> anyhow::Result<()> {
         })
         .await
         .unwrap();
+        tracing::info!("Pingora proxy server has shut down");
     });
 
+    let api_shutdown = shutdown.clone();
     let api_handle = tokio::spawn(async move {
         let listener = TcpListener::bind("0.0.0.0:3001")
             .await
             .expect("Failed to bind API port");
         tracing::info!("API Server listening on 0.0.0.0:3001");
-        if let Err(e) = axum::serve(listener, app).await {
-            tracing::error!("API Server error: {}", e);
+        let graceful = axum::serve(listener, app)
+            .with_graceful_shutdown(async move { api_shutdown.cancelled().await });
+        // Bound how long we wait for in-flight requests to finish — an API
+        // hung on some in-flight request shouldn't stop the process from
+        // ever exiting.
+        match tokio::time::timeout(std::time::Duration::from_secs(20), graceful).await {
+            Ok(Ok(())) => tracing::info!("API server has shut down"),
+            Ok(Err(e)) => tracing::error!("API server error: {}", e),
+            Err(_) => {
+                tracing::warn!("API server graceful shutdown timed out after 20s; exiting anyway")
+            }
         }
     });
 
-    tokio::select! {
-        res = proxy_handle => {
-            tracing::error!("Proxy server terminated: {:?}", res);
+    // Trigger cancellation on SIGTERM/Ctrl+C, then wait for everything that
+    // depends on it to actually finish before this process exits.
+    tokio::spawn({
+        let shutdown = shutdown.clone();
+        async move {
+            common::shutdown::wait_for_signal().await;
+            tracing::info!("Shutdown signal received, starting graceful shutdown...");
+            shutdown.cancel();
         }
-        res = api_handle => {
-            tracing::error!("API server terminated: {:?}", res);
-        }
-    };
+    });
+
+    let _ = tokio::join!(api_handle, proxy_handle, health_handle);
+    tracing::info!("Oxide has shut down");
 
     Ok(())
 }

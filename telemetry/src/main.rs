@@ -49,16 +49,25 @@ async fn main() -> anyhow::Result<()> {
         .count(10)
         .block(5000);
 
+    let shutdown = common::shutdown::wait_for_signal();
+    tokio::pin!(shutdown);
+
     loop {
-        let reply: StreamReadReply = match conn
-            .xread_options(&[DEPLOYMENT_STREAM], &[">"], &opts)
-            .await
-        {
-            Ok(reply) => reply,
-            Err(e) => {
-                tracing::warn!("Error reading from Redis stream: {}. Retrying...", e);
-                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-                continue;
+        let reply: StreamReadReply = tokio::select! {
+            biased;
+            _ = &mut shutdown => {
+                tracing::info!("Shutdown signal received, stopping telemetry consumer");
+                break;
+            }
+            result = conn.xread_options(&[DEPLOYMENT_STREAM], &[">"], &opts) => {
+                match result {
+                    Ok(reply) => reply,
+                    Err(e) => {
+                        tracing::warn!("Error reading from Redis stream: {}. Retrying...", e);
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                        continue;
+                    }
+                }
             }
         };
 
@@ -106,4 +115,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     }
+
+    tracing::info!("Telemetry consumer has shut down");
+    Ok(())
 }

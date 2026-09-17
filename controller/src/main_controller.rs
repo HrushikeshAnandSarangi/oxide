@@ -2,6 +2,7 @@ use crate::deployment_service::DeploymentService;
 use crate::state::ControlState;
 use anyhow::Result;
 use std::sync::Arc;
+use tokio_util::sync::CancellationToken;
 
 pub struct ControlPlane {
     pub state: Arc<ControlState>,
@@ -9,17 +10,33 @@ pub struct ControlPlane {
 }
 
 impl ControlPlane {
-    pub fn new(state: ControlState) -> Self {
+    /// `shutdown` stops the worker from picking up *new* queued deploys once
+    /// cancelled, but never interrupts a deploy that's already running
+    /// (nix build / docker build mid-flight is not something to abort
+    /// abruptly — that risks stray containers or half-built images).
+    pub fn new(state: ControlState, shutdown: CancellationToken) -> Self {
         let state = Arc::new(state);
         let (tx, mut rx) = tokio::sync::mpsc::channel::<(uuid::Uuid, String)>(100);
 
         let worker_state = state.clone();
         tokio::spawn(async move {
             tracing::info!("Async Deployment worker started.");
-            while let Some((deployment_id, subdomain)) = rx.recv().await {
-                let service = DeploymentService::new(worker_state.clone());
-                if let Err(e) = service.deploy(deployment_id, subdomain.clone()).await {
-                    tracing::error!("Deployment pipeline failed for {}: {}", subdomain, e);
+            loop {
+                tokio::select! {
+                    biased;
+                    _ = shutdown.cancelled() => {
+                        tracing::info!("Deployment worker shutting down, no longer accepting new deploys");
+                        break;
+                    }
+                    item = rx.recv() => {
+                        let Some((deployment_id, subdomain)) = item else {
+                            break;
+                        };
+                        let service = DeploymentService::new(worker_state.clone());
+                        if let Err(e) = service.deploy(deployment_id, subdomain.clone()).await {
+                            tracing::error!("Deployment pipeline failed for {}: {}", subdomain, e);
+                        }
+                    }
                 }
             }
         });

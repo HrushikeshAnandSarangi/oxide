@@ -4,14 +4,21 @@ use common::events::{DeploymentEvent, EventType};
 use domain::deployment::DeploymentStatus;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
 
-pub async fn start_health_monitor(state: Arc<ControlState>) {
+pub async fn start_health_monitor(state: Arc<ControlState>, shutdown: CancellationToken) {
     tracing::info!("Starting Container Health Monitor...");
     let mut interval = tokio::time::interval(Duration::from_secs(15));
     let client = reqwest::Client::new();
 
     loop {
-        interval.tick().await;
+        tokio::select! {
+            _ = shutdown.cancelled() => {
+                tracing::info!("Health monitor shutting down");
+                break;
+            }
+            _ = interval.tick() => {}
+        }
 
         if let Ok(active_routes) = state.deployments.get_running_deployments().await {
             for (subdomain, port) in active_routes {
