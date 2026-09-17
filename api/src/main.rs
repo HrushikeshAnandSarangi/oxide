@@ -115,17 +115,19 @@ async fn main() -> anyhow::Result<()> {
             .await
             .expect("Failed to bind API port");
         tracing::info!("API Server listening on 0.0.0.0:3001");
-        let graceful = axum::serve(listener, app)
-            .with_graceful_shutdown(async move { api_shutdown.cancelled().await });
-        // Bound how long we wait for in-flight requests to finish — an API
-        // hung on some in-flight request shouldn't stop the process from
-        // ever exiting.
-        match tokio::time::timeout(std::time::Duration::from_secs(20), graceful).await {
-            Ok(Ok(())) => tracing::info!("API server has shut down"),
-            Ok(Err(e)) => tracing::error!("API server error: {}", e),
-            Err(_) => {
-                tracing::warn!("API server graceful shutdown timed out after 20s; exiting anyway")
-            }
+        // `with_graceful_shutdown`'s future runs the server indefinitely —
+        // accepting and serving requests — until `api_shutdown` is
+        // cancelled, and only then drains in-flight requests. It must be
+        // awaited directly, not wrapped in a timeout: a timeout here bounds
+        // the server's *entire* lifetime, not just the post-shutdown drain
+        // (this previously killed the API after a flat 20s regardless of
+        // whether shutdown was ever requested).
+        match axum::serve(listener, app)
+            .with_graceful_shutdown(async move { api_shutdown.cancelled().await })
+            .await
+        {
+            Ok(()) => tracing::info!("API server has shut down"),
+            Err(e) => tracing::error!("API server error: {}", e),
         }
     });
 
