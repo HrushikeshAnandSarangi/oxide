@@ -38,10 +38,31 @@ async fn main() -> anyhow::Result<()> {
     let project_repo = Arc::new(db::project_repo::ProjectRepository::new(pool.clone()));
 
     tracing::info!("Initializing subsystems (Builder, Runtime, Proxy)...");
-    let builder_path = std::path::PathBuf::from("/var/oxide/builds");
+    // /var/oxide/* is the production default (see systemd/oxide-api.service,
+    // which overrides these explicitly) — it needs root to create, so it
+    // silently broke every local dev deploy with a "Permission denied"
+    // buried inside a git-clone failure. Default to a repo-local directory
+    // instead; production keeps working via the env var override.
+    let builder_path = std::env::var("OXIDE_BUILDS_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from(".oxide/builds"));
+    std::fs::create_dir_all(&builder_path).with_context(|| {
+        format!(
+            "Failed to create builds directory at {}",
+            builder_path.display()
+        )
+    })?;
     let builder = Arc::new(Builder::new(builder_path));
 
-    let runtime_path = std::path::PathBuf::from("/var/oxide/runtime");
+    let runtime_path = std::env::var("OXIDE_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from(".oxide/runtime"));
+    std::fs::create_dir_all(&runtime_path).with_context(|| {
+        format!(
+            "Failed to create runtime directory at {}",
+            runtime_path.display()
+        )
+    })?;
     let runtime =
         Arc::new(Runtime::new(runtime_path).context("Failed to initialize Docker runtime")?);
     let proxy_state = Arc::new(ProxyState::new());

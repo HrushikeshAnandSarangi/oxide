@@ -10,6 +10,8 @@ WorkingDirectory=/var/oxide/app
 ExecStart=/var/oxide/app/target/release/api
 Environment="DATABASE_URL=postgres://postgres:postgres@localhost:5432/oxide"
 Environment="RUST_LOG=info"
+Environment="OXIDE_BUILDS_DIR=/var/oxide/builds"
+Environment="OXIDE_RUNTIME_DIR=/var/oxide/runtime"
 Restart=always
 RestartSec=5
 
