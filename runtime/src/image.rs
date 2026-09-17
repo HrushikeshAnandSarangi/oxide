@@ -1,6 +1,7 @@
 use bollard::Docker;
 use bollard::query_parameters::BuildImageOptions;
 use bytes::Bytes;
+use common::buildlog::LogSender;
 use common::error::OxideError;
 use futures_util::TryStreamExt;
 use http_body_util::Full;
@@ -16,7 +17,12 @@ fn tarball(path: PathBuf) -> Result<Vec<u8>> {
         .map_err(|e| OxideError::Runtime(e.to_string()))
 }
 
-pub async fn build(docker: &Docker, tag: &str, context_path: PathBuf) -> Result<()> {
+pub async fn build(
+    docker: &Docker,
+    tag: &str,
+    context_path: PathBuf,
+    log_tx: Option<&LogSender>,
+) -> Result<()> {
     let options = BuildImageOptions {
         dockerfile: "Dockerfile".to_string(),
         t: Some(tag.to_string()),
@@ -34,7 +40,11 @@ pub async fn build(docker: &Docker, tag: &str, context_path: PathBuf) -> Result<
         .map_err(|e| OxideError::Runtime(e.to_string()))?
     {
         if let Some(s) = msg.stream {
-            tracing::info!("{}", s.trim());
+            let line = s.trim();
+            tracing::info!("{}", line);
+            if let Some(tx) = log_tx {
+                let _ = tx.send(line.to_string());
+            }
         }
     }
 

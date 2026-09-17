@@ -1,6 +1,7 @@
 use crate::deployment_service::DeploymentService;
 use crate::state::ControlState;
 use anyhow::Result;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
@@ -72,6 +73,69 @@ impl ControlPlane {
             .send((deployment_id, project_subdomain))
             .await
             .map_err(|e| anyhow::anyhow!("Queue full or closed: {}", e))?;
+        Ok(deployment_id)
+    }
+
+    /// One-command rollback: redeploys the project's previous artifact
+    /// (skipping git clone / nix build entirely — the artifact already
+    /// exists in the Nix store) as a brand new deployment, then retires the
+    /// currently-active one exactly like a normal deploy would. Runs on its
+    /// own task rather than through the shared build queue, since it's a
+    /// fast operation (no build) that shouldn't have to wait behind
+    /// possibly-slow regular deploys for other projects.
+    pub async fn rollback(&self, project_subdomain: String) -> Result<uuid::Uuid> {
+        let project = self
+            .state
+            .projects
+            .find_by_subdomain(&project_subdomain)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Project not found"))?;
+
+        let active_id = project
+            .active_deployment_id
+            .ok_or_else(|| anyhow::anyhow!("Project has no active deployment to roll back from"))?;
+
+        let previous = self
+            .state
+            .deployments
+            .find_previous_for_project(&project.id, &active_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("No previous deployment to roll back to"))?;
+
+        let artifact_path = previous
+            .artifact_path
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("Previous deployment has no recorded artifact path"))?;
+
+        let deployment_id = uuid::Uuid::new_v4();
+        let deployment = domain::Deployment {
+            id: deployment_id,
+            project_id: project.id,
+            version: format!("rollback-{}", &previous.id.to_string()[..8]),
+            artifact_path: Some(artifact_path.clone()),
+            docker_image: None,
+            container_id: None,
+            status: domain::deployment::DeploymentStatus::Queued,
+            created_at: chrono::Utc::now(),
+        };
+        self.state.deployments.create(&deployment).await?;
+
+        let state = self.state.clone();
+        let subdomain = project_subdomain.clone();
+        tokio::spawn(async move {
+            let service = DeploymentService::new(state);
+            if let Err(e) = service
+                .redeploy_artifact(
+                    deployment_id,
+                    subdomain.clone(),
+                    PathBuf::from(artifact_path),
+                )
+                .await
+            {
+                tracing::error!("Rollback failed for {}: {}", subdomain, e);
+            }
+        });
+
         Ok(deployment_id)
     }
 

@@ -55,6 +55,59 @@ pub async fn get_deployment(
         .map(Json)
 }
 
+#[derive(serde::Serialize)]
+pub struct DeploymentLogsResponse {
+    pub status: String,
+    pub build_log: Option<String>,
+    pub container_log: Option<String>,
+}
+
+/// Build/image-build output (nix build + docker build, appended live as the
+/// deployment progresses) plus, once a container exists, its runtime logs —
+/// the full "how is this building/running" picture for one deployment.
+pub async fn get_deployment_logs(
+    State(state): State<AppState>,
+    Path(id): Path<uuid::Uuid>,
+) -> Result<Json<DeploymentLogsResponse>, StatusCode> {
+    let deployment = state
+        .control_plane
+        .state
+        .deployments
+        .find_by_id(&id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get deployment {}: {}", id, e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let build_log = state
+        .control_plane
+        .state
+        .deployments
+        .get_build_log(&id)
+        .await
+        .unwrap_or(None);
+
+    let container_log = if let Some(container_id) = &deployment.container_id {
+        state
+            .control_plane
+            .state
+            .runtime
+            .get_logs(container_id)
+            .await
+            .ok()
+    } else {
+        None
+    };
+
+    Ok(Json(DeploymentLogsResponse {
+        status: deployment.status,
+        build_log,
+        container_log,
+    }))
+}
+
 pub async fn get_project_logs(
     State(state): State<AppState>,
     Path(id): Path<uuid::Uuid>,

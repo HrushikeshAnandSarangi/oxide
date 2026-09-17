@@ -55,6 +55,12 @@ export interface Deployment {
   created_at: string;
 }
 
+export interface DeploymentLogs {
+  status: DeploymentStatus;
+  build_log: string | null;
+  container_log: string | null;
+}
+
 async function unwrap<T>(res: Response, fallbackError: string): Promise<T> {
   if (!res.ok) {
     const errText = await res.text();
@@ -107,5 +113,19 @@ export const api = {
       const errText = await res.text();
       throw new Error(errText || "Failed to delete deployment");
     }
+  },
+
+  getDeploymentLogs: async (id: string): Promise<DeploymentLogs> => {
+    const res = await fetch(`/api/deployments/${id}/logs`);
+    return unwrap(res, "Failed to load logs");
+  },
+
+  rollback: async (data: DeploymentRequest): Promise<DeploymentResponse> => {
+    const res = await fetch("/api/rollback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return unwrap(res, "Failed to start rollback");
   },
 };

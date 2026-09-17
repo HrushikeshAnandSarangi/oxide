@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use common::buildlog::LogSender;
 use common::error::OxideError;
 use uuid::Uuid;
 
@@ -18,14 +19,21 @@ impl Builder {
         repo_url: &str,
         deployment_id: Uuid,
         auto_generate_flake: bool,
+        log_tx: Option<LogSender>,
     ) -> Result<PathBuf, OxideError> {
         let build_dir = self.root.join(deployment_id.to_string());
+        if let Some(tx) = &log_tx {
+            let _ = tx.send(format!("Cloning {repo_url}..."));
+        }
         git::clone(repo_url, &build_dir).await?;
 
         let impure = self
             .maybe_generate_flake(&build_dir, auto_generate_flake)
             .await?;
-        nix::build(&build_dir, impure).await?;
+        if let Some(tx) = &log_tx {
+            let _ = tx.send("Running nix build...".to_string());
+        }
+        nix::build(&build_dir, impure, log_tx).await?;
 
         let artifact_path = artifact::resolve(&build_dir)?;
         Ok(artifact_path)
@@ -66,7 +74,7 @@ impl Builder {
         let impure = matches!(lang, detect::Language::Python);
 
         if generated.needs_hash_retry
-            && let Err(OxideError::Build(stderr)) = nix::build(build_dir, impure).await
+            && let Err(OxideError::Build(stderr)) = nix::build(build_dir, impure, None).await
         {
             match flake_gen::extract_real_hash(&stderr) {
                 Some(real_hash) => {

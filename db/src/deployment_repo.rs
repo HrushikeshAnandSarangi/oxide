@@ -92,6 +92,55 @@ impl DeploymentRepository {
         .await
     }
 
+    pub async fn append_build_log(&self, id: &Uuid, line: &str) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"
+            UPDATE deployments
+            SET build_log = COALESCE(build_log, '') || $1 || E'\n'
+            WHERE id = $2
+            "#,
+        )
+        .bind(line)
+        .bind(id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Fetched separately from `find_by_id`/`list_all` (which use `SELECT
+    /// *` into `DeploymentRow`, deliberately without this field) so the
+    /// deployments list/table view doesn't drag a potentially large log
+    /// blob along for every row on every poll.
+    pub async fn get_build_log(&self, id: &Uuid) -> Result<Option<String>, sqlx::Error> {
+        use sqlx::Row;
+        sqlx::query("SELECT build_log FROM deployments WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map(|row| row.and_then(|r| r.get::<Option<String>, _>("build_log")))
+    }
+
+    /// The most recent *other* deployment for this project that still has a
+    /// usable artifact — what `rollback` redeploys.
+    pub async fn find_previous_for_project(
+        &self,
+        project_id: &Uuid,
+        exclude_id: &Uuid,
+    ) -> Result<Option<crate::models::DeploymentRow>, sqlx::Error> {
+        sqlx::query_as::<_, crate::models::DeploymentRow>(
+            r#"
+            SELECT * FROM deployments
+            WHERE project_id = $1 AND id != $2 AND artifact_path IS NOT NULL
+            ORDER BY created_at DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(project_id)
+        .bind(exclude_id)
+        .fetch_optional(&self.pool)
+        .await
+    }
+
     pub async fn delete(&self, id: &Uuid) -> Result<(), sqlx::Error> {
         sqlx::query("DELETE FROM deployments WHERE id = $1")
             .bind(id)

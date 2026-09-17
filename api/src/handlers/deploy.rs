@@ -54,3 +54,26 @@ pub async fn delete_deployment(
         })?;
     Ok(StatusCode::NO_CONTENT)
 }
+
+/// One-command rollback to the project's previous built artifact.
+pub async fn rollback(
+    State(state): State<AppState>,
+    Json(payload): Json<DeploymentRequest>,
+) -> Result<(StatusCode, Json<DeploymentResponse>), (StatusCode, String)> {
+    let deployment_id = state
+        .control_plane
+        .rollback(payload.subdomain)
+        .await
+        .map_err(|e| {
+            tracing::error!("Rollback failed: {}", e);
+            (StatusCode::BAD_REQUEST, e.to_string())
+        })?;
+
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(DeploymentResponse {
+            message: "rollback started".to_string(),
+            deployment_id: deployment_id.to_string(),
+        }),
+    ))
+}

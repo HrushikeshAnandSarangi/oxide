@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use bollard::Docker;
+use common::buildlog::LogSender;
 use common::error::OxideError;
 use uuid::Uuid;
 
@@ -21,9 +22,10 @@ impl Runtime {
         artifact_path: PathBuf,
         deployment_id: Uuid,
         env_vars: Option<Vec<String>>,
+        log_tx: Option<LogSender>,
     ) -> Result<(String, u16), OxideError> {
         let image_tag = format!("oxide-{}", deployment_id);
-        image::build(&self.docker, &image_tag, artifact_path).await?;
+        image::build(&self.docker, &image_tag, artifact_path, log_tx.as_ref()).await?;
         let (container_id, port) =
             container::run_container(&self.docker, &image_tag, env_vars).await?;
         Ok((container_id, port))
