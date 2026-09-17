@@ -80,13 +80,10 @@ impl DeploymentService {
             "v1"
         );
 
-        let mut new_deployment = domain::deployment::Deployment::new(project.id, "v1".to_string());
-        new_deployment.id = deployment_id;
-
-        if let Err(e) = self.state.deployments.create(&new_deployment).await {
-            tracing::warn!("Failed to create deployment record: {}", e);
-        }
-
+        // The row already exists — ControlPlane::deploy() creates it (status
+        // Queued) before handing off to this worker, so the caller gets a
+        // valid deployment_id back immediately rather than waiting on the
+        // queue to drain.
         if let Err(e) = self
             .state
             .deployments
@@ -112,11 +109,10 @@ impl DeploymentService {
         {
             Ok(artifact) => artifact,
             Err(e) => {
-                let _ = self
-                    .state
-                    .deployments
-                    .update_status(&deployment_id, DeploymentStatus::BuildFailed)
-                    .await;
+                // Don't keep a row for a deployment that never worked — the
+                // failure is still fully recorded in the BuildFailed metric
+                // and the telemetry event just below, both emitted before
+                // the row is removed.
                 metrics::DEPLOYMENTS_TOTAL
                     .with_label_values(&["BuildFailed"])
                     .inc();
@@ -125,6 +121,7 @@ impl DeploymentService {
                         .with_duration_ms(build_start.elapsed().as_millis() as i64),
                 )
                 .await;
+                let _ = self.state.deployments.delete(&deployment_id).await;
                 return Err(e.into());
             }
         };
@@ -157,11 +154,8 @@ impl DeploymentService {
         {
             Ok(res) => res,
             Err(e) => {
-                let _ = self
-                    .state
-                    .deployments
-                    .update_status(&deployment_id, DeploymentStatus::Crashed)
-                    .await;
+                // Same reasoning as the BuildFailed case above: this
+                // deployment never became Running, so it isn't kept.
                 metrics::DEPLOYMENTS_TOTAL
                     .with_label_values(&["Crashed"])
                     .inc();
@@ -171,6 +165,7 @@ impl DeploymentService {
                     EventType::DeploymentCrashed,
                 ))
                 .await;
+                let _ = self.state.deployments.delete(&deployment_id).await;
                 return Err(e.into());
             }
         };

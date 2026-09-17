@@ -1,6 +1,8 @@
 use crate::state::AppState;
 use axum::Json;
+use axum::extract::Path;
 pub use axum::extract::State;
+use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -34,4 +36,21 @@ pub async fn deploy(
             deployment_id: deployment_id.to_string(),
         }),
     ))
+}
+
+/// Gracefully tears the deployment down (stop + remove its container,
+/// remove its proxy route if it's the active one) and deletes the record.
+pub async fn delete_deployment(
+    State(state): State<AppState>,
+    Path(id): Path<uuid::Uuid>,
+) -> Result<StatusCode, StatusCode> {
+    state
+        .control_plane
+        .delete_deployment(id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to delete deployment {}: {}", id, e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(StatusCode::NO_CONTENT)
 }

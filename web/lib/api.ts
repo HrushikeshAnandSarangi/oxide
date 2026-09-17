@@ -100,4 +100,12 @@ export const api = {
     const res = await fetch("/api/deployments");
     return unwrap(res, "Failed to load deployments");
   },
+
+  deleteDeployment: async (id: string): Promise<void> => {
+    const res = await fetch(`/api/deployments/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(errText || "Failed to delete deployment");
+    }
+  },
 };

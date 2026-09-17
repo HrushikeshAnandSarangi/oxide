@@ -61,6 +61,17 @@ impl ProjectRepository {
         Ok(())
     }
 
+    pub async fn clear_active_deployment(
+        &self,
+        project_id: &uuid::Uuid,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query("UPDATE projects SET active_deployment_id = NULL WHERE id = $1")
+            .bind(project_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub async fn list_all(&self) -> Result<Vec<crate::models::ProjectRow>, sqlx::Error> {
         sqlx::query_as::<_, crate::models::ProjectRow>(
             "SELECT * FROM projects ORDER BY created_at DESC",

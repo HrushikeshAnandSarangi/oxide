@@ -75,6 +75,48 @@ impl ControlPlane {
         Ok(deployment_id)
     }
 
+    /// Gracefully tears down a deployment: stops and removes its container
+    /// (if it has one), removes its proxy route and clears the project's
+    /// active_deployment_id (only if this deployment is actually the one
+    /// currently routed — deleting an old, already-superseded deployment
+    /// must never rip out a newer one's live route), then deletes the row.
+    ///
+    /// Deleting a deployment that's still mid-build (Queued/Building/etc.)
+    /// doesn't cancel it — there's no cancellation hook into the builder
+    /// pipeline today — it just removes the row; if that build later
+    /// succeeds, its container ends up untracked. Acceptable for now since
+    /// deleting something still in progress is expected to be rare.
+    pub async fn delete_deployment(&self, deployment_id: uuid::Uuid) -> Result<()> {
+        let deployment = self
+            .state
+            .deployments
+            .find_by_id(&deployment_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Deployment not found"))?;
+
+        if let Some(container_id) = &deployment.container_id {
+            let _ = self.state.runtime.stop(container_id).await;
+            let _ = self.state.runtime.remove(container_id).await;
+        }
+
+        if let Some(project) = self
+            .state
+            .projects
+            .find_by_id(&deployment.project_id)
+            .await?
+            && project.active_deployment_id == Some(deployment_id)
+        {
+            self.state.proxy.remove_route(&project.subdomain);
+            self.state
+                .projects
+                .clear_active_deployment(&project.id)
+                .await?;
+        }
+
+        self.state.deployments.delete(&deployment_id).await?;
+        Ok(())
+    }
+
     pub async fn create_project(
         &self,
         project: &domain::Project,

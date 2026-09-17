@@ -4,7 +4,7 @@ use axum::{
 };
 
 use crate::handlers::{
-    deploy::deploy,
+    deploy::{delete_deployment, deploy},
     health::health,
     history::{get_deployment, get_project_logs, list_deployments, list_projects},
     metrics::metrics,
@@ -21,6 +21,9 @@ pub fn create_router(state: AppState) -> Router {
         .route("/projects", get(list_projects))
         .route("/projects/{id}/logs", get(get_project_logs))
         .route("/deployments", get(list_deployments))
-        .route("/deployments/{id}", get(get_deployment))
+        .route(
+            "/deployments/{id}",
+            get(get_deployment).delete(delete_deployment),
+        )
         .with_state(state)
 }

@@ -92,6 +92,14 @@ impl DeploymentRepository {
         .await
     }
 
+    pub async fn delete(&self, id: &Uuid) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM deployments WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub async fn get_running_deployments(&self) -> Result<Vec<(String, u16)>, sqlx::Error> {
         use sqlx::Row;
         let records = sqlx::query(

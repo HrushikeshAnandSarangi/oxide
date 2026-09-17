@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api, type Deployment, type DeploymentStatus, type Project } from "../lib/api";
-import { Activity, AlertCircle, Box, Plus, Rocket } from "lucide-react";
+import { Activity, AlertCircle, Box, Plus, Rocket, Trash2 } from "lucide-react";
 
 const STATUS_STYLES: Record<DeploymentStatus, string> = {
   Running: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
@@ -40,6 +40,7 @@ export default function Dashboard() {
   const [autoGenerateFlake, setAutoGenerateFlake] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const refresh = useCallback(async () => {
@@ -113,6 +114,26 @@ export default function Dashboard() {
     } catch (err: unknown) {
       const text = err instanceof Error ? err.message : "Failed to start deployment";
       setMessage({ type: "error", text });
+    }
+  };
+
+  const handleDelete = async (deployment: Deployment) => {
+    const confirmed = window.confirm(
+      `Delete this deployment (${deployment.version}, ${deployment.status})? This stops and removes its container and cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setDeletingId(deployment.id);
+    setMessage(null);
+    try {
+      await api.deleteDeployment(deployment.id);
+      setMessage({ type: "success", text: "Deployment deleted" });
+      refresh();
+    } catch (err: unknown) {
+      const text = err instanceof Error ? err.message : "Failed to delete deployment";
+      setMessage({ type: "error", text });
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -294,6 +315,7 @@ export default function Dashboard() {
                 <th className="px-4 py-3 font-medium">Version</th>
                 <th className="px-4 py-3 font-medium">Port</th>
                 <th className="px-4 py-3 font-medium">Created</th>
+                <th className="px-4 py-3 font-medium text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -305,11 +327,22 @@ export default function Dashboard() {
                   <td className="px-4 py-3 text-slate-300 font-mono text-xs">{d.version}</td>
                   <td className="px-4 py-3 text-slate-400">{d.container_port ?? "—"}</td>
                   <td className="px-4 py-3 text-slate-500">{formatTimestamp(d.created_at)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => handleDelete(d)}
+                      disabled={deletingId === d.id}
+                      title="Delete deployment"
+                      className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      {deletingId === d.id ? "Deleting…" : "Delete"}
+                    </button>
+                  </td>
                 </tr>
               ))}
               {visibleDeployments.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-slate-600 text-sm">
+                  <td colSpan={5} className="px-4 py-8 text-center text-slate-600 text-sm">
                     No deployments yet
                   </td>
                 </tr>
